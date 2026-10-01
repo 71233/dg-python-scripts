@@ -1,0 +1,1 @@
+"""Optional, explicit JSON configuration."""
