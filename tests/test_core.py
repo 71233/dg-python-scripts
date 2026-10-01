@@ -1,19 +1,19 @@
 """Exercise registry, config and runtime contracts without Flame or Qt."""
 
 import importlib.util
-import json
 import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import tomllib
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 from dg_python_scripts.actions.menu import build_menu
 from dg_python_scripts.actions.registry import ACTION_CONTEXTS, Action, ActionRegistry
-from dg_python_scripts.config.loader import Config, load_config
+from dg_python_scripts.config.loader import Config, ExtensionsConfig, UIConfig, load_config
 from dg_python_scripts import hooks
 from dg_python_scripts.runtime import detect_runtime, parse_version
 
@@ -99,25 +99,50 @@ class ConfigTests(unittest.TestCase):
 
     def test_file_and_environment(self):
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "config.json"
-            path.write_text(json.dumps({"menu_caption": "DG Tools"}), encoding="utf-8")
+            path = Path(directory) / "dgpy.toml"
+            path.write_text(
+                """
+[ui]
+menu_caption = "DG Tools"
+
+[extensions]
+modules = ["ext.one", "ext.two"]
+""".strip(),
+                encoding="utf-8",
+            )
+            expected = Config(
+                ui=UIConfig(menu_caption="DG Tools"),
+                extensions=ExtensionsConfig(modules=("ext.one", "ext.two")),
+            )
             with patch.dict(os.environ, {"DGPY_CONFIG": str(path)}):
-                self.assertEqual(load_config().menu_caption, "DG Tools")
-            with patch.dict(os.environ, {"DGPY_CONFIG": "/missing/environment.json"}):
-                self.assertEqual(load_config(path).menu_caption, "DG Tools")
+                self.assertEqual(load_config(), expected)
+            with patch.dict(os.environ, {"DGPY_CONFIG": "/missing/environment.toml"}):
+                self.assertEqual(load_config(path), expected)
 
     def test_invalid_config(self):
+        invalid_values = (
+            'menu_caption = "old-style"',
+            '[ui]\nmenu_caption = ""',
+            '[ui]\nmenu_caption = 5',
+            '[ui]\nunknown = true',
+            '[extensions]\nmodules = "not-an-array"',
+            '[extensions]\nmodules = ["bad-name"]',
+            '[extensions]\nmodules = ["ext.one", "ext.one"]',
+            '[unknown]\nenabled = true',
+        )
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "config.json"
-            for value in [[], {"menu_caption": ""}, {"menu_caption": 5}, {"unknown": True}]:
-                path.write_text(json.dumps(value), encoding="utf-8")
+            path = Path(directory) / "dgpy.toml"
+            for value in invalid_values:
+                path.write_text(value, encoding="utf-8")
                 with self.subTest(value=value), self.assertRaises(ValueError):
                     load_config(path)
-            path.write_text("{", encoding="utf-8")
-            with self.assertRaises(json.JSONDecodeError):
+
+            path.write_text("[ui", encoding="utf-8")
+            with self.assertRaises(tomllib.TOMLDecodeError):
                 load_config(path)
             with self.assertRaises(FileNotFoundError):
-                load_config(Path(directory) / "missing.json")
+                load_config(Path(directory) / "missing.toml")
+
 
 
 class RuntimeTests(unittest.TestCase):

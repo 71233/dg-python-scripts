@@ -34,7 +34,7 @@ src/dg_python_scripts/
   actions/menu.py            # Flame menu辞書への共通serialize
   actions/main_menu.py       # About / Diagnostics
   ui/theme.py, about.py      # 小さなDGpyテーマと診断dialog
-  config/loader.py           # defaults + optional JSON
+  config/loader.py           # defaults + optional TOML
   compat/__init__.py         # 将来のAPI差分の置き場
 tests/                       # Flame不要のunittest
 ```
@@ -98,15 +98,27 @@ DGpy version、Flame version、Python version、runtime分類が表示されま�
 
 ## 設定
 
-設定なしで動作します。任意で`DGPY_CONFIG`をJSONファイルの絶対パスへ設定できます。
+設定なしで動作します。任意で `DGPY_CONFIG` にTOMLファイルの絶対パスを指定します。
+Flame 2025.2.7のPython 3.11に含まれる標準ライブラリ `tomllib` を使うため、
+設定読み込みのための外部dependencyはありません。
 
-```json
-{"menu_caption": "DGpy"}
+```toml
+[ui]
+menu_caption = "DGpy"
+
+[extensions]
+modules = []
 ```
 
-現在の設定項目は`menu_caption`のみです。未指定はdefaultを使用します。
-指定ファイルの不存在、JSON不正、未知のkey、空captionは明示的なエラーとし、
-bootstrap境界でログに記録します。設定の読み込みはmenu構築時です。
+Coreが扱う設定はCore自身の責務に限定します。
+
+- `[ui]`: DGpy Coreの表示設定。
+- `[extensions]`: 読み込むExtension module名。実際のload処理はExtension loaderで扱います。
+- 社内パス、サーバー名、社内サービス設定などはCore schemaへ追加せず、internal Extension側で管理します。
+
+未知のtable/key、空のcaption、不正なmodule名、module名の重複は明示的なエラーです。
+指定ファイルの不存在やTOML構文エラーも隠さず、bootstrap境界でログに記録します。
+設定の読み込みは各Flame menu hookの構築時です。
 
 ## Extensionへの入口
 

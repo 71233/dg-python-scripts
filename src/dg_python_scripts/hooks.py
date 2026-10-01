@@ -20,7 +20,7 @@ def get_registry() -> ActionRegistry:
 
 def _get_custom_ui_actions(context: str) -> tuple:
     config = load_config()
-    return build_menu(get_registry(), context, config.menu_caption)
+    return build_menu(get_registry(), context, config.ui.menu_caption)
 
 
 def get_main_menu_custom_ui_actions() -> tuple:
