@@ -18,6 +18,7 @@ class Action:
     contexts: tuple[str, ...] = DEFAULT_CONTEXTS
     order: int | None = None
     minimum_version: str | None = None
+    flame_name: str | None = None
 
     def __post_init__(self):
         if not self.id.strip() or not self.caption.strip():
@@ -42,10 +43,19 @@ class Action:
             or not self.minimum_version.strip()
         ):
             raise ValueError("minimum_version must be a non-empty string or None")
+        if self.flame_name is not None and (
+            not isinstance(self.flame_name, str) or not self.flame_name.strip()
+        ):
+            raise ValueError("flame_name must be a non-empty string or None")
+
+    @property
+    def host_name(self) -> str:
+        """Name exposed to Flame; defaults to the visible caption."""
+        return self.flame_name or self.caption
 
     def as_menu_item(self) -> dict[str, Any]:
         item: dict[str, Any] = {
-            "name": self.id,
+            "name": self.host_name,
             "caption": self.caption,
             "execute": self.execute,
         }

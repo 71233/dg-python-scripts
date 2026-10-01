@@ -30,10 +30,29 @@ class RegistryTests(unittest.TestCase):
         group, = build_menu(registry, "main_menu")
         self.assertEqual(group["name"], "DGpy")
         self.assertIsInstance(group["actions"], tuple)
-        self.assertEqual([a["name"] for a in group["actions"]], ["ext.one", "ext.two"])
+        self.assertEqual([a["name"] for a in group["actions"]], ["One", "Two"])
         selection = (object(),)
         group["actions"][0]["execute"](selection)
         self.assertEqual(received, [selection])
+
+    def test_internal_id_is_separate_from_flame_name(self):
+        action = Action("dgpy.test", "Readable Label", lambda selection: None)
+        item = action.as_menu_item()
+        self.assertEqual(action.id, "dgpy.test")
+        self.assertEqual(action.host_name, "Readable Label")
+        self.assertEqual(item["name"], "Readable Label")
+        self.assertEqual(item["caption"], "Readable Label")
+        self.assertNotIn("dgpy.test", item.values())
+
+        pinned = Action(
+            "dgpy.pinned",
+            "New Caption",
+            lambda selection: None,
+            flame_name="Stable Flame Name",
+        )
+        self.assertEqual(pinned.host_name, "Stable Flame Name")
+        self.assertEqual(pinned.as_menu_item()["name"], "Stable Flame Name")
+        self.assertEqual(pinned.as_menu_item()["caption"], "New Caption")
 
     def test_context_filtering_and_serialization(self):
         registry = ActionRegistry()
@@ -103,6 +122,8 @@ class RegistryTests(unittest.TestCase):
                 Action(identifier, caption, lambda selection: None)
         with self.assertRaises(TypeError):
             Action("one", "One", None)
+        with self.assertRaises(ValueError):
+            Action("one", "One", lambda selection: None, flame_name=" ")
 
 
 class RepositoryBoundaryTests(unittest.TestCase):
@@ -182,7 +203,7 @@ class ExtensionTests(unittest.TestCase):
             calls.append("called")
             registry.register(
                 Action(
-                    "dgpy.test.extension",
+                    "Extension",
                     "Extension",
                     lambda selection: None,
                     contexts=("media_panel",),
@@ -292,7 +313,7 @@ class HookTests(unittest.TestCase):
             first = hooks.get_main_menu_custom_ui_actions()
             second = hooks.get_main_menu_custom_ui_actions()
             self.assertEqual(first, second)
-            self.assertEqual([a["name"] for a in first[0]["actions"]], ["dgpy.about", "ext.test"])
+            self.assertEqual([a["name"] for a in first[0]["actions"]], ["About / Diagnostics", "Extension"])
             self.assertEqual(hooks.get_media_panel_custom_ui_actions(), ())
             self.assertEqual(hooks.get_mediahub_files_custom_ui_actions(), ())
             self.assertEqual(hooks.get_mediahub_archives_custom_ui_actions(), ())
@@ -310,9 +331,9 @@ class HookTests(unittest.TestCase):
                     contexts=("media_panel", "timeline"),
                 )
             )
-            self.assertEqual(hooks.get_main_menu_custom_ui_actions()[0]["actions"][0]["name"], "dgpy.about")
-            self.assertEqual(hooks.get_media_panel_custom_ui_actions()[0]["actions"][0]["name"], "ext.multi")
-            self.assertEqual(hooks.get_timeline_custom_ui_actions()[0]["actions"][0]["name"], "ext.multi")
+            self.assertEqual(hooks.get_main_menu_custom_ui_actions()[0]["actions"][0]["name"], "About / Diagnostics")
+            self.assertEqual(hooks.get_media_panel_custom_ui_actions()[0]["actions"][0]["name"], "Multi")
+            self.assertEqual(hooks.get_timeline_custom_ui_actions()[0]["actions"][0]["name"], "Multi")
             self.assertEqual(hooks.get_mediahub_files_custom_ui_actions(), ())
             self.assertEqual(hooks.get_mediahub_archives_custom_ui_actions(), ())
             self.assertEqual(hooks.get_batch_custom_ui_actions(), ())

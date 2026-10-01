@@ -2,7 +2,7 @@
 
 Autodesk Flame専用のPythonツール基盤。主リポジトリは
 [`71233/dg-python-scripts`](https://github.com/71233/dg-python-scripts)。
-現在は初期構成であり、Flame実機での検証・本番導入はまだ行っていません。
+初期構成をFlame 2025.2.7および2026.2.3実機で読み込み確認済みです。
 
 
 ## 命名
