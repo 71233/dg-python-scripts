@@ -137,7 +137,7 @@ def execute_internal_tool(selection):
 
 def register_actions(registry):
     registry.register(Action(
-        "dg_python_scripts_internal.example",
+        "dgpy.internal.example",
         "Internal Tool",
         execute_internal_tool,
         contexts=("media_panel", "timeline"),
