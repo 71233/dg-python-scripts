@@ -160,6 +160,13 @@ ExtensionはDGpy process registryの初回生成時に1回だけ読み込まれ�
 `[extensions].modules` の変更を確実に反映するにはFlameを再起動してください。
 この段階では自動探索やPython entry pointは使わず、明示的なTOML設定を採用します。
 
+
+## CI
+
+GitHub ActionsはPython 3.11でPublic Core単独のunit testとwheel buildを実行します。
+Public sourceが`dg_python_scripts_internal`を参照しないこともテストし、
+public → internal の逆依存をCIで防ぎます。Internal repoへのアクセスは行いません。
+
 ## ライセンス
 
 ライセンスは未確定です。[LICENSE.md](LICENSE.md)に公開Coreとinternalの分離方針を記録しています。
