@@ -30,8 +30,9 @@ src/dg_python_scripts/
   __init__.py, version.py
   hooks.py                   # menu入口とCore registry
   runtime.py                 # Flame version検出
-  actions/registry.py        # 順序保持、重複IDを拒否
-  actions/main_menu.py       # About / Diagnosticsとmenu生成
+  actions/registry.py        # context対応、順序保持、重複IDを拒否
+  actions/menu.py            # Flame menu辞書への共通serialize
+  actions/main_menu.py       # About / Diagnostics
   ui/theme.py, about.py      # 小さなDGpyテーマと診断dialog
   config/loader.py           # defaults + optional JSON
   compat/__init__.py         # 将来のAPI差分の置き場
@@ -124,13 +125,23 @@ def execute_internal_tool(selection):
 
 def register_actions(registry):
     registry.register(Action(
-        "dg_python_scripts_internal.example", "Internal Tool", execute_internal_tool
+        "dg_python_scripts_internal.example",
+        "Internal Tool",
+        execute_internal_tool,
+        contexts=("media_panel", "timeline"),
+        order=100,
+        minimum_version="2025.2.7",
     ))
 
 # Extension側の起動処理から一度だけ呼ぶ。
 # Flameのmain thread上で、menuが構築される前に登録する。
 register_actions(get_registry())
 ```
+
+Actionは `contexts` で表示先を指定します。現在のCoreが扱うcontextは
+`main_menu`, `media_panel`, `timeline`, `batch`, `action` です。
+同じActionを複数contextへ登録しても実装本体は1つのままです。
+`order` と `minimum_version` は必要なActionだけ指定します。
 
 callbackは選択オブジェクトのtupleを受け取ります。IDはExtensionごとのnamespaceを使います。
 重複IDは上書きせず拒否します。Coreのbuiltin登録は繰り返しのmenu取得でも増殖しません。

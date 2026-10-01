@@ -3,14 +3,35 @@
 import logging
 
 
-def get_main_menu_custom_ui_actions():
-    """Delegate to Core; a broken install must not break other Flame hooks."""
+def _delegate(hook_name):
+    """Delegate one Flame hook; a broken DGpy install must not break other hooks."""
     try:
-        from dg_python_scripts.hooks import get_main_menu_custom_ui_actions as build_menu
+        from dg_python_scripts import hooks
 
-        return build_menu()
+        return getattr(hooks, hook_name)()
     except Exception:
         logging.getLogger("dgpy.bootstrap").exception(
-            "DGpy menu unavailable. Check package installation/PYTHONPATH."
+            "DGpy hook %s unavailable. Check package installation/PYTHONPATH.",
+            hook_name,
         )
         return ()
+
+
+def get_main_menu_custom_ui_actions():
+    return _delegate("get_main_menu_custom_ui_actions")
+
+
+def get_media_panel_custom_ui_actions():
+    return _delegate("get_media_panel_custom_ui_actions")
+
+
+def get_timeline_custom_ui_actions():
+    return _delegate("get_timeline_custom_ui_actions")
+
+
+def get_batch_custom_ui_actions():
+    return _delegate("get_batch_custom_ui_actions")
+
+
+def get_action_custom_ui_actions():
+    return _delegate("get_action_custom_ui_actions")

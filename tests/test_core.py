@@ -11,8 +11,8 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from dg_python_scripts.actions.main_menu import build_main_menu
-from dg_python_scripts.actions.registry import Action, ActionRegistry
+from dg_python_scripts.actions.menu import build_menu
+from dg_python_scripts.actions.registry import ACTION_CONTEXTS, Action, ActionRegistry
 from dg_python_scripts.config.loader import Config, load_config
 from dg_python_scripts import hooks
 from dg_python_scripts.runtime import detect_runtime, parse_version
@@ -26,13 +26,44 @@ class RegistryTests(unittest.TestCase):
         received = []
         registry.register(Action("ext.one", "One", received.append))
         registry.register(Action("ext.two", "Two", received.append))
-        group, = build_main_menu(registry)
+        group, = build_menu(registry, "main_menu")
         self.assertEqual(group["name"], "DGpy")
         self.assertIsInstance(group["actions"], tuple)
         self.assertEqual([a["name"] for a in group["actions"]], ["ext.one", "ext.two"])
         selection = (object(),)
         group["actions"][0]["execute"](selection)
         self.assertEqual(received, [selection])
+
+    def test_context_filtering_and_serialization(self):
+        registry = ActionRegistry()
+        action = Action(
+            "ext.multi",
+            "Multi",
+            lambda selection: None,
+            contexts=("main_menu", "media_panel", "main_menu"),
+            order=42,
+            minimum_version="2025.2.7",
+        )
+        registry.register(action)
+
+        self.assertEqual(action.contexts, ("main_menu", "media_panel"))
+        self.assertEqual(registry.actions("main_menu"), (action,))
+        self.assertEqual(registry.actions("media_panel"), (action,))
+        self.assertEqual(registry.actions("timeline"), ())
+
+        item = build_menu(registry, "media_panel")[0]["actions"][0]
+        self.assertEqual(item["order"], 42)
+        self.assertEqual(item["minimumVersion"], "2025.2.7")
+
+    def test_supported_contexts_are_explicit(self):
+        self.assertEqual(
+            ACTION_CONTEXTS,
+            {"main_menu", "media_panel", "timeline", "batch", "action"},
+        )
+        with self.assertRaises(ValueError):
+            Action("bad", "Bad", lambda selection: None, contexts=("unknown",))
+        with self.assertRaises(ValueError):
+            build_menu(ActionRegistry(), "unknown")
 
     def test_duplicate_rejected(self):
         registry = ActionRegistry()
@@ -43,7 +74,7 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(registry.actions(), (action,))
 
     def test_empty_registry(self):
-        self.assertEqual(build_main_menu(ActionRegistry()), ())
+        self.assertEqual(build_menu(ActionRegistry(), "main_menu"), ())
 
     def test_invalid_actions(self):
         for identifier, caption in [("", "One"), ("one", " ")]:
@@ -120,6 +151,26 @@ class HookTests(unittest.TestCase):
             second = hooks.get_main_menu_custom_ui_actions()
             self.assertEqual(first, second)
             self.assertEqual([a["name"] for a in first[0]["actions"]], ["dgpy.about", "ext.test"])
+            self.assertEqual(hooks.get_media_panel_custom_ui_actions(), ())
+            self.assertEqual(hooks.get_timeline_custom_ui_actions(), ())
+            self.assertEqual(hooks.get_batch_custom_ui_actions(), ())
+            self.assertEqual(hooks.get_action_custom_ui_actions(), ())
+
+    def test_multi_context_extension_reaches_only_target_hooks(self):
+        with patch.object(hooks, "_registry", None), patch.dict(os.environ, {}, clear=True):
+            hooks.get_registry().register(
+                Action(
+                    "ext.multi",
+                    "Multi",
+                    lambda selection: None,
+                    contexts=("media_panel", "timeline"),
+                )
+            )
+            self.assertEqual(hooks.get_main_menu_custom_ui_actions()[0]["actions"][0]["name"], "dgpy.about")
+            self.assertEqual(hooks.get_media_panel_custom_ui_actions()[0]["actions"][0]["name"], "ext.multi")
+            self.assertEqual(hooks.get_timeline_custom_ui_actions()[0]["actions"][0]["name"], "ext.multi")
+            self.assertEqual(hooks.get_batch_custom_ui_actions(), ())
+            self.assertEqual(hooks.get_action_custom_ui_actions(), ())
 
     def bootstrap(self):
         spec = importlib.util.spec_from_file_location(
@@ -130,8 +181,19 @@ class HookTests(unittest.TestCase):
         return module
 
     def test_bootstrap_delegates(self):
-        with patch("dg_python_scripts.hooks.get_main_menu_custom_ui_actions", return_value=("sentinel",)):
-            self.assertEqual(self.bootstrap().get_main_menu_custom_ui_actions(), ("sentinel",))
+        bootstrap = self.bootstrap()
+        hook_names = (
+            "get_main_menu_custom_ui_actions",
+            "get_media_panel_custom_ui_actions",
+            "get_timeline_custom_ui_actions",
+            "get_batch_custom_ui_actions",
+            "get_action_custom_ui_actions",
+        )
+        for hook_name in hook_names:
+            with self.subTest(hook_name=hook_name), patch(
+                f"dg_python_scripts.hooks.{hook_name}", return_value=("sentinel",)
+            ):
+                self.assertEqual(getattr(bootstrap, hook_name)(), ("sentinel",))
 
     def test_bootstrap_contains_failures(self):
         with patch("dg_python_scripts.hooks.get_main_menu_custom_ui_actions", side_effect=ValueError("bad config")):

@@ -1,4 +1,4 @@
-"""Initial, read-only diagnostics action and Flame menu serialization."""
+"""Built-in DGpy actions."""
 
 from .registry import Action, ActionRegistry
 
@@ -11,9 +11,12 @@ def show_about(selection=()) -> None:
 
 
 def register_builtin_actions(registry: ActionRegistry) -> None:
-    registry.register(Action("dgpy.about", "About / Diagnostics", show_about))
-
-
-def build_main_menu(registry: ActionRegistry, caption: str = "DGpy") -> tuple:
-    items = tuple(action.as_menu_item() for action in registry.actions())
-    return ({"name": caption, "actions": items},) if items else ()
+    registry.register(
+        Action(
+            "dgpy.about",
+            "About / Diagnostics",
+            show_about,
+            contexts=("main_menu",),
+            order=1000,
+        )
+    )
