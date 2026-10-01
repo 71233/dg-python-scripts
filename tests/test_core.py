@@ -203,7 +203,7 @@ class ExtensionTests(unittest.TestCase):
             calls.append("called")
             registry.register(
                 Action(
-                    "Extension",
+                    "dgpy.test.extension",
                     "Extension",
                     lambda selection: None,
                     contexts=("media_panel",),
