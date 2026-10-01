@@ -6,7 +6,7 @@ import logging
 def get_main_menu_custom_ui_actions():
     """Delegate to Core; a broken install must not break other Flame hooks."""
     try:
-        from dgpy.hooks import get_main_menu_custom_ui_actions as build_menu
+        from dg_python_scripts.hooks import get_main_menu_custom_ui_actions as build_menu
 
         return build_menu()
     except Exception:

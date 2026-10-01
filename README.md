@@ -4,6 +4,19 @@ Autodesk Flame専用のPythonツール基盤。主リポジトリは
 [`71233/dg-python-scripts`](https://github.com/71233/dg-python-scripts)。
 現在は初期構成であり、Flame実機での検証・本番導入はまだ行っていません。
 
+
+## 命名
+
+- **表示名 / 製品名:** `DGpy`
+- **GitHub / distribution名:** `dg-python-scripts`
+- **Python import package:** `dg_python_scripts`
+- **Flame bootstrap:** `dgpy_bootstrap.py`
+- **環境変数 / Action namespace:** `DGPY_*` / `dgpy.*`
+- **Internal distribution / import:** `dg-python-scripts-internal` / `dg_python_scripts_internal`
+
+Pythonのdistribution名とimport名は同じ語をハイフン／アンダースコアで表現し、
+既存の `dgpy` 名前空間とは分離します。Flame UI上では短いブランド名 `DGpy` を維持します。
+
 ## 対象と構成
 
 - **Primary:** Flame 2025.2.7 / Python 3.11 / PySide6。
@@ -13,7 +26,7 @@ Autodesk Flame専用のPythonツール基盤。主リポジトリは
 
 ```text
 bootstrap/dgpy_bootstrap.py   # Flame Hook領域に置く唯一のDGpyファイル
-src/dgpy/
+src/dg_python_scripts/
   __init__.py, version.py
   hooks.py                   # menu入口とCore registry
   runtime.py                 # Flame version検出
@@ -25,7 +38,7 @@ src/dgpy/
 tests/                       # Flame不要のunittest
 ```
 
-Thin Hook / Thick Package: bootstrapはHook呼び出しを`dgpy.hooks`へ委譲します。
+Thin Hook / Thick Package: bootstrapはHook呼び出しを`dg_python_scripts.hooks`へ委譲します。
 importやmenu構築に失敗した場合はtracebackをログに出し、空tupleを返します。
 業務処理、設定、UI、Action定義はすべてpackage側へ置きます。
 
@@ -45,7 +58,7 @@ python3.11 -m venv .venv
 PYTHONPATH="$PWD/src" python3.11 -m unittest discover -s tests -v
 ```
 
-配布物にはpackageと`share/dgpy/bootstrap/dgpy_bootstrap.py`を含めます。
+配布物にはpackageと`share/dg-python-scripts/bootstrap/dgpy_bootstrap.py`を含めます。
 wheelの構築は`python3.11 -m pip wheel --no-deps . -w dist`で行えます。
 Flame Hook領域への配置は自動で行いません。
 
@@ -103,15 +116,15 @@ Coreはinternal packageの存在、サービス、設定を知りません。
 
 ```python
 # 将来のExtension側のコード例（Coreはこのmoduleをimportしない）
-from dgpy.actions.registry import Action
-from dgpy.hooks import get_registry
+from dg_python_scripts.actions.registry import Action
+from dg_python_scripts.hooks import get_registry
 
 def execute_internal_tool(selection):
     print("Internal tool")
 
 def register_actions(registry):
     registry.register(Action(
-        "dgpy_internal.example", "Internal Tool", execute_internal_tool
+        "dg_python_scripts_internal.example", "Internal Tool", execute_internal_tool
     ))
 
 # Extension側の起動処理から一度だけ呼ぶ。
