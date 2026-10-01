@@ -159,6 +159,7 @@ Extension内部の例外はそのExtensionだけを無効にしてログへ記�
 ExtensionはDGpy process registryの初回生成時に1回だけ読み込まれます。
 `[extensions].modules` の変更を確実に反映するにはFlameを再起動してください。
 この段階では自動探索やPython entry pointは使わず、明示的なTOML設定を採用します。
+
 ## ライセンス
 
 ライセンスは未確定です。[LICENSE.md](LICENSE.md)に公開Coreとinternalの分離方針を記録しています。

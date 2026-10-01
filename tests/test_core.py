@@ -183,7 +183,7 @@ class ExtensionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "dgpy.toml"
             path.write_text(
-                '[extensions]\\nmodules = ["test_dgpy_extension"]',
+                '[extensions]\nmodules = ["test_dgpy_extension"]',
                 encoding="utf-8",
             )
             with (
