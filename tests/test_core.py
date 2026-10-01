@@ -224,7 +224,7 @@ class ExtensionTests(unittest.TestCase):
             ):
                 self.assertEqual(
                     hooks.get_media_panel_custom_ui_actions()[0]["actions"][0]["name"],
-                    "dgpy.test.extension",
+                    "Extension",
                 )
                 hooks.get_timeline_custom_ui_actions()
                 hooks.get_main_menu_custom_ui_actions()
