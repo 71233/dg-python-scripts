@@ -105,6 +105,16 @@ class RegistryTests(unittest.TestCase):
             Action("one", "One", None)
 
 
+class RepositoryBoundaryTests(unittest.TestCase):
+    def test_public_source_does_not_reference_internal_package(self):
+        for path in (ROOT / "src").rglob("*.py"):
+            with self.subTest(path=path):
+                self.assertNotIn(
+                    "dg_python_scripts_internal",
+                    path.read_text(encoding="utf-8"),
+                )
+
+
 class ConfigTests(unittest.TestCase):
     def test_defaults(self):
         with patch.dict(os.environ, {}, clear=True):
