@@ -25,6 +25,14 @@ def get_media_panel_custom_ui_actions():
     return _delegate("get_media_panel_custom_ui_actions")
 
 
+def get_mediahub_files_custom_ui_actions():
+    return _delegate("get_mediahub_files_custom_ui_actions")
+
+
+def get_mediahub_archives_custom_ui_actions():
+    return _delegate("get_mediahub_archives_custom_ui_actions")
+
+
 def get_timeline_custom_ui_actions():
     return _delegate("get_timeline_custom_ui_actions")
 

@@ -139,7 +139,7 @@ register_actions(get_registry())
 ```
 
 Actionは `contexts` で表示先を指定します。現在のCoreが扱うcontextは
-`main_menu`, `media_panel`, `timeline`, `batch`, `action` です。
+`main_menu`, `media_panel`, `mediahub_files`, `mediahub_archives`, `timeline`, `batch`, `action` です。
 同じActionを複数contextへ登録しても実装本体は1つのままです。
 `order` と `minimum_version` は必要なActionだけ指定します。
 

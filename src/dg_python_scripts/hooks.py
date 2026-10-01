@@ -31,6 +31,14 @@ def get_media_panel_custom_ui_actions() -> tuple:
     return _get_custom_ui_actions("media_panel")
 
 
+def get_mediahub_files_custom_ui_actions() -> tuple:
+    return _get_custom_ui_actions("mediahub_files")
+
+
+def get_mediahub_archives_custom_ui_actions() -> tuple:
+    return _get_custom_ui_actions("mediahub_archives")
+
+
 def get_timeline_custom_ui_actions() -> tuple:
     return _get_custom_ui_actions("timeline")
 

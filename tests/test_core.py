@@ -58,7 +58,15 @@ class RegistryTests(unittest.TestCase):
     def test_supported_contexts_are_explicit(self):
         self.assertEqual(
             ACTION_CONTEXTS,
-            {"main_menu", "media_panel", "timeline", "batch", "action"},
+            {
+                "main_menu",
+                "media_panel",
+                "mediahub_files",
+                "mediahub_archives",
+                "timeline",
+                "batch",
+                "action",
+            },
         )
         with self.assertRaises(ValueError):
             Action("bad", "Bad", lambda selection: None, contexts=("unknown",))
@@ -152,6 +160,8 @@ class HookTests(unittest.TestCase):
             self.assertEqual(first, second)
             self.assertEqual([a["name"] for a in first[0]["actions"]], ["dgpy.about", "ext.test"])
             self.assertEqual(hooks.get_media_panel_custom_ui_actions(), ())
+            self.assertEqual(hooks.get_mediahub_files_custom_ui_actions(), ())
+            self.assertEqual(hooks.get_mediahub_archives_custom_ui_actions(), ())
             self.assertEqual(hooks.get_timeline_custom_ui_actions(), ())
             self.assertEqual(hooks.get_batch_custom_ui_actions(), ())
             self.assertEqual(hooks.get_action_custom_ui_actions(), ())
@@ -169,6 +179,8 @@ class HookTests(unittest.TestCase):
             self.assertEqual(hooks.get_main_menu_custom_ui_actions()[0]["actions"][0]["name"], "dgpy.about")
             self.assertEqual(hooks.get_media_panel_custom_ui_actions()[0]["actions"][0]["name"], "ext.multi")
             self.assertEqual(hooks.get_timeline_custom_ui_actions()[0]["actions"][0]["name"], "ext.multi")
+            self.assertEqual(hooks.get_mediahub_files_custom_ui_actions(), ())
+            self.assertEqual(hooks.get_mediahub_archives_custom_ui_actions(), ())
             self.assertEqual(hooks.get_batch_custom_ui_actions(), ())
             self.assertEqual(hooks.get_action_custom_ui_actions(), ())
 
@@ -185,6 +197,8 @@ class HookTests(unittest.TestCase):
         hook_names = (
             "get_main_menu_custom_ui_actions",
             "get_media_panel_custom_ui_actions",
+            "get_mediahub_files_custom_ui_actions",
+            "get_mediahub_archives_custom_ui_actions",
             "get_timeline_custom_ui_actions",
             "get_batch_custom_ui_actions",
             "get_action_custom_ui_actions",

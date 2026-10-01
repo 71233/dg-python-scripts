@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 ACTION_CONTEXTS = frozenset(
-    {"main_menu", "media_panel", "timeline", "batch", "action"}
+    {"main_menu", "media_panel", "mediahub_files", "mediahub_archives", "timeline", "batch", "action"}
 )
 DEFAULT_CONTEXTS = ("main_menu",)
 
