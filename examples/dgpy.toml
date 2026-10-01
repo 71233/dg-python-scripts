@@ -3,3 +3,4 @@ menu_caption = "DGpy"
 
 [extensions]
 modules = []
+# Internal example: modules = ["dg_python_scripts_internal"]

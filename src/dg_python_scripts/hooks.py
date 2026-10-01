@@ -3,24 +3,34 @@
 from .actions.main_menu import register_builtin_actions
 from .actions.menu import build_menu
 from .actions.registry import ActionRegistry
-from .config.loader import load_config
+from .config.loader import Config, load_config
+from .extensions.loader import load_extensions
 
 _registry: ActionRegistry | None = None
 
 
-def get_registry() -> ActionRegistry:
-    """Explicit extension seam; call on Flame's main thread before menu build."""
+def _get_registry(config: Config | None = None) -> ActionRegistry:
     global _registry
     if _registry is None:
+        if config is None:
+            config = load_config()
+
         registry = ActionRegistry()
         register_builtin_actions(registry)
+        load_extensions(config.extensions.modules, registry)
         _registry = registry
     return _registry
 
 
+def get_registry() -> ActionRegistry:
+    """Return the process registry, creating it and configured extensions once."""
+    return _get_registry()
+
+
 def _get_custom_ui_actions(context: str) -> tuple:
     config = load_config()
-    return build_menu(get_registry(), context, config.ui.menu_caption)
+    registry = _get_registry(config)
+    return build_menu(registry, context, config.ui.menu_caption)
 
 
 def get_main_menu_custom_ui_actions() -> tuple:

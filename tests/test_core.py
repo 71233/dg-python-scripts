@@ -7,13 +7,14 @@ import subprocess
 import sys
 import tempfile
 import tomllib
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 from dg_python_scripts.actions.menu import build_menu
 from dg_python_scripts.actions.registry import ACTION_CONTEXTS, Action, ActionRegistry
 from dg_python_scripts.config.loader import Config, ExtensionsConfig, UIConfig, load_config
+from dg_python_scripts.extensions.loader import load_extensions
 from dg_python_scripts import hooks
 from dg_python_scripts.runtime import detect_runtime, parse_version
 
@@ -72,6 +73,18 @@ class RegistryTests(unittest.TestCase):
             Action("bad", "Bad", lambda selection: None, contexts=("unknown",))
         with self.assertRaises(ValueError):
             build_menu(ActionRegistry(), "unknown")
+
+    def test_register_many_is_atomic(self):
+        registry = ActionRegistry()
+        existing = Action("ext.existing", "Existing", lambda selection: None)
+        registry.register(existing)
+
+        new = Action("ext.new", "New", lambda selection: None)
+        conflicting = Action("ext.existing", "Conflict", lambda selection: None)
+        with self.assertRaises(ValueError):
+            registry.register_many((new, conflicting))
+
+        self.assertEqual(registry.actions(), (existing,))
 
     def test_duplicate_rejected(self):
         registry = ActionRegistry()
@@ -144,6 +157,92 @@ modules = ["ext.one", "ext.two"]
                 load_config(Path(directory) / "missing.toml")
 
 
+
+class ExtensionTests(unittest.TestCase):
+    def extension_module(self, name, register=None):
+        module = ModuleType(name)
+        if register is not None:
+            module.register = register
+        return module
+
+    def test_configured_extension_registers_once_per_registry(self):
+        calls = []
+
+        def register(registry):
+            calls.append("called")
+            registry.register(
+                Action(
+                    "dgpy.test.extension",
+                    "Extension",
+                    lambda selection: None,
+                    contexts=("media_panel",),
+                )
+            )
+
+        module = self.extension_module("test_dgpy_extension", register)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "dgpy.toml"
+            path.write_text(
+                '[extensions]\\nmodules = ["test_dgpy_extension"]',
+                encoding="utf-8",
+            )
+            with (
+                patch.dict(sys.modules, {"test_dgpy_extension": module}),
+                patch.dict(os.environ, {"DGPY_CONFIG": str(path)}, clear=True),
+                patch.object(hooks, "_registry", None),
+            ):
+                self.assertEqual(
+                    hooks.get_media_panel_custom_ui_actions()[0]["actions"][0]["name"],
+                    "dgpy.test.extension",
+                )
+                hooks.get_timeline_custom_ui_actions()
+                hooks.get_main_menu_custom_ui_actions()
+
+        self.assertEqual(calls, ["called"])
+
+    def test_extension_failures_are_isolated_and_atomic(self):
+        def bad_register(registry):
+            registry.register(
+                Action(
+                    "dgpy.test.partial",
+                    "Partial",
+                    lambda selection: None,
+                    contexts=("media_panel",),
+                )
+            )
+            raise RuntimeError("broken extension")
+
+        def good_register(registry):
+            registry.register(
+                Action(
+                    "dgpy.test.good",
+                    "Good",
+                    lambda selection: None,
+                    contexts=("media_panel",),
+                )
+            )
+
+        modules = {
+            "test_bad_extension": self.extension_module("test_bad_extension", bad_register),
+            "test_missing_register": self.extension_module("test_missing_register"),
+            "test_good_extension": self.extension_module("test_good_extension", good_register),
+        }
+        registry = ActionRegistry()
+        with patch.dict(sys.modules, modules), self.assertLogs("dgpy.extensions", level="ERROR"):
+            loaded = load_extensions(
+                (
+                    "test_bad_extension",
+                    "test_missing_register",
+                    "test_good_extension",
+                ),
+                registry,
+            )
+
+        self.assertEqual(loaded, ("test_good_extension",))
+        self.assertEqual(
+            tuple(action.id for action in registry.actions()),
+            ("dgpy.test.good",),
+        )
 
 class RuntimeTests(unittest.TestCase):
     def test_version_parsing(self):

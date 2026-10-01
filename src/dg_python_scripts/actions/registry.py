@@ -65,6 +65,21 @@ class ActionRegistry:
             raise ValueError(f"Duplicate action id: {action.id}")
         self._actions[action.id] = action
 
+    def register_many(self, actions) -> None:
+        pending = tuple(actions)
+        identifiers = [action.id for action in pending]
+        duplicates = sorted(
+            identifier for identifier in set(identifiers)
+            if identifiers.count(identifier) > 1
+        )
+        conflicts = sorted(set(identifiers) & set(self._actions))
+        if duplicates:
+            raise ValueError(f"Duplicate action ids in batch: {duplicates}")
+        if conflicts:
+            raise ValueError(f"Action ids already registered: {conflicts}")
+        for action in pending:
+            self._actions[action.id] = action
+
     def actions(self, context: str | None = None) -> tuple[Action, ...]:
         if context is None:
             return tuple(self._actions.values())

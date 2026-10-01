@@ -35,6 +35,7 @@ src/dg_python_scripts/
   actions/main_menu.py       # About / Diagnostics
   ui/theme.py, about.py      # 小さなDGpyテーマと診断dialog
   config/loader.py           # defaults + optional TOML
+  extensions/loader.py      # config指定moduleのgeneric loader
   compat/__init__.py         # 将来のAPI差分の置き場
 tests/                       # Flame不要のunittest
 ```
@@ -120,45 +121,44 @@ Coreが扱う設定はCore自身の責務に限定します。
 指定ファイルの不存在やTOML構文エラーも隠さず、bootstrap境界でログに記録します。
 設定の読み込みは各Flame menu hookの構築時です。
 
-## Extensionへの入口
+## Extension
 
-依存方向は`dg-python-scripts-internal → dg-python-scripts`のみです。
-Coreはinternal packageの存在、サービス、設定を知りません。
-この段階では自動探索、entry point、extension lifecycleを実装しません。
-明示的な登録の最小入口は次のとおりです。
+依存方向は常に `dg-python-scripts-internal → dg-python-scripts` です。
+Coreはinternal package名をハードコードせず、TOMLに指定されたPython moduleをgenericに読み込みます。
+
+```toml
+[extensions]
+modules = ["dg_python_scripts_internal"]
+```
+
+Extension moduleは公開関数 `register(registry)` を1つ実装します。
 
 ```python
-# 将来のExtension側のコード例（Coreはこのmoduleをimportしない）
 from dg_python_scripts.actions.registry import Action
-from dg_python_scripts.hooks import get_registry
 
 def execute_internal_tool(selection):
     print("Internal tool")
 
-def register_actions(registry):
-    registry.register(Action(
-        "dgpy.internal.example",
-        "Internal Tool",
-        execute_internal_tool,
-        contexts=("media_panel", "timeline"),
-        order=100,
-        minimum_version="2025.2.7",
-    ))
-
-# Extension側の起動処理から一度だけ呼ぶ。
-# Flameのmain thread上で、menuが構築される前に登録する。
-register_actions(get_registry())
+def register(registry):
+    registry.register(
+        Action(
+            "dgpy.internal.example",
+            "Internal Tool",
+            execute_internal_tool,
+            contexts=("media_panel", "timeline"),
+            order=100,
+            minimum_version="2025.2.7",
+        )
+    )
 ```
 
-Actionは `contexts` で表示先を指定します。現在のCoreが扱うcontextは
-`main_menu`, `media_panel`, `mediahub_files`, `mediahub_archives`, `timeline`, `batch`, `action` です。
-同じActionを複数contextへ登録しても実装本体は1つのままです。
-`order` と `minimum_version` は必要なActionだけ指定します。
+CoreはExtensionごとに一時Registryを渡し、`register()` が最後まで成功した場合だけ
+Actionを本体Registryへまとめて反映します。import失敗、contract不正、Action ID衝突、
+Extension内部の例外はそのExtensionだけを無効にしてログへ記録し、DGpy Coreと他Extensionは継続します。
 
-callbackは選択オブジェクトのtupleを受け取ります。IDはExtensionごとのnamespaceを使います。
-重複IDは上書きせず拒否します。Coreのbuiltin登録は繰り返しのmenu取得でも増殖しません。
-この登録APIは0.1段階の暫定APIです。実際のinternal Extension導入時に起動順序と契約を検証します。
-
+ExtensionはDGpy process registryの初回生成時に1回だけ読み込まれます。
+`[extensions].modules` の変更を確実に反映するにはFlameを再起動してください。
+この段階では自動探索やPython entry pointは使わず、明示的なTOML設定を採用します。
 ## ライセンス
 
 ライセンスは未確定です。[LICENSE.md](LICENSE.md)に公開Coreとinternalの分離方針を記録しています。
