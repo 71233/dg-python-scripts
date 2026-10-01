@@ -1,7 +1,7 @@
 """Read-only About/Diagnostics dialog hosted by Flame's existing Qt app."""
 
-from dgpy.runtime import detect_runtime
-from dgpy.version import __version__
+from dg_python_scripts.runtime import detect_runtime
+from dg_python_scripts.version import __version__
 from .theme import STYLESHEET
 
 

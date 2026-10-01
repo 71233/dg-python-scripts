@@ -5,7 +5,7 @@ from .registry import Action, ActionRegistry
 
 def show_about(selection=()) -> None:
     # Qt is loaded only when the artist clicks the action.
-    from dgpy.ui.about import show_about_dialog
+    from dg_python_scripts.ui.about import show_about_dialog
 
     show_about_dialog()
 

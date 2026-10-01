@@ -11,11 +11,11 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from dgpy.actions.main_menu import build_main_menu
-from dgpy.actions.registry import Action, ActionRegistry
-from dgpy.config.loader import Config, load_config
-from dgpy import hooks
-from dgpy.runtime import detect_runtime, parse_version
+from dg_python_scripts.actions.main_menu import build_main_menu
+from dg_python_scripts.actions.registry import Action, ActionRegistry
+from dg_python_scripts.config.loader import Config, load_config
+from dg_python_scripts import hooks
+from dg_python_scripts.runtime import detect_runtime, parse_version
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -106,7 +106,7 @@ class RuntimeTests(unittest.TestCase):
 
     def test_broken_host_dependency_not_hidden(self):
         error = ModuleNotFoundError("host dependency missing", name="host_dependency")
-        with patch("dgpy.runtime.importlib.import_module", side_effect=error):
+        with patch("dg_python_scripts.runtime.importlib.import_module", side_effect=error):
             with self.assertRaises(ModuleNotFoundError):
                 detect_runtime()
 
@@ -130,11 +130,11 @@ class HookTests(unittest.TestCase):
         return module
 
     def test_bootstrap_delegates(self):
-        with patch("dgpy.hooks.get_main_menu_custom_ui_actions", return_value=("sentinel",)):
+        with patch("dg_python_scripts.hooks.get_main_menu_custom_ui_actions", return_value=("sentinel",)):
             self.assertEqual(self.bootstrap().get_main_menu_custom_ui_actions(), ("sentinel",))
 
     def test_bootstrap_contains_failures(self):
-        with patch("dgpy.hooks.get_main_menu_custom_ui_actions", side_effect=ValueError("bad config")):
+        with patch("dg_python_scripts.hooks.get_main_menu_custom_ui_actions", side_effect=ValueError("bad config")):
             with self.assertLogs("dgpy.bootstrap", level="ERROR") as captured:
                 self.assertEqual(self.bootstrap().get_main_menu_custom_ui_actions(), ())
             self.assertIn("bad config", captured.output[0])
@@ -152,7 +152,7 @@ class HookTests(unittest.TestCase):
     def test_core_imports_without_host_or_qt(self):
         code = (
             f"import sys; sys.path.insert(0, {str(ROOT / 'src')!r}); "
-            "import dgpy, dgpy.hooks, dgpy.ui.about; "
+            "import dg_python_scripts, dg_python_scripts.hooks, dg_python_scripts.ui.about; "
             "assert 'flame' not in sys.modules; assert 'PySide6' not in sys.modules"
         )
         result = subprocess.run([sys.executable, "-I", "-S", "-c", code], capture_output=True, text=True)

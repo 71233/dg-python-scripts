@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "dgpy"
+name = "dg-python-scripts"
 dynamic = ["version"]
 description = "DG Python tools for Autodesk Flame"
 readme = "README.md"
@@ -14,10 +14,10 @@ dependencies = []
 Repository = "https://github.com/71233/dg-python-scripts"
 
 [tool.setuptools.dynamic]
-version = {attr = "dgpy.version.__version__"}
+version = {attr = "dg_python_scripts.version.__version__"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.data-files]
-"share/dgpy/bootstrap" = ["bootstrap/dgpy_bootstrap.py"]
+"share/dg-python-scripts/bootstrap" = ["bootstrap/dgpy_bootstrap.py"]
