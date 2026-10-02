@@ -82,6 +82,35 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(item["order"], 42)
         self.assertEqual(item["minimumVersion"], "2025.2.7")
 
+    def test_root_hierarchy_and_wait_cursor_serialization(self):
+        registry = ActionRegistry()
+        root = Action(
+            "dgpy.root",
+            "Root",
+            lambda selection: None,
+            hierarchy=(),
+            wait_cursor=False,
+        )
+        grouped = Action("dgpy.grouped", "Grouped", lambda selection: None)
+        registry.register_many((root, grouped))
+
+        root_group, dgpy_group = build_menu(registry, "main_menu")
+
+        self.assertEqual(root_group["hierarchy"], [])
+        self.assertNotIn("name", root_group)
+        self.assertEqual(
+            [action["name"] for action in root_group["actions"]],
+            ["Root"],
+        )
+        self.assertFalse(root_group["actions"][0]["waitCursor"])
+
+        self.assertEqual(dgpy_group["name"], "DGpy")
+        self.assertEqual(dgpy_group["hierarchy"], [])
+        self.assertEqual(
+            [action["name"] for action in dgpy_group["actions"]],
+            ["Grouped"],
+        )
+
     def test_supported_contexts_are_explicit(self):
         self.assertEqual(
             ACTION_CONTEXTS,
@@ -131,6 +160,10 @@ class RegistryTests(unittest.TestCase):
             Action("one", "One", None)
         with self.assertRaises(ValueError):
             Action("one", "One", lambda selection: None, flame_name=" ")
+        with self.assertRaises(ValueError):
+            Action("one", "One", lambda selection: None, hierarchy=("",))
+        with self.assertRaises(TypeError):
+            Action("one", "One", lambda selection: None, wait_cursor="no")
 
 
 class RepositoryBoundaryTests(unittest.TestCase):
@@ -229,11 +262,15 @@ class ExtensionTests(unittest.TestCase):
                 patch.dict(os.environ, {"DGPY_CONFIG": str(path)}, clear=True),
                 patch.object(hooks, "_registry", None),
             ):
-                names = [
-                    action["name"]
-                    for action in hooks.get_media_panel_custom_ui_actions()[0]["actions"]
-                ]
-                self.assertEqual(names, ["Rename...", "Extension"])
+                root_group, dgpy_group = hooks.get_media_panel_custom_ui_actions()
+                self.assertEqual(
+                    [action["name"] for action in root_group["actions"]],
+                    ["Rename..."],
+                )
+                self.assertEqual(
+                    [action["name"] for action in dgpy_group["actions"]],
+                    ["Extension"],
+                )
                 hooks.get_timeline_custom_ui_actions()
                 hooks.get_main_menu_custom_ui_actions()
 
@@ -323,7 +360,12 @@ class HookTests(unittest.TestCase):
             self.assertEqual(first, second)
             self.assertEqual(
                 [a["name"] for a in first[0]["actions"]],
-                ["Rename...", "About / Diagnostics", "Extension"],
+                ["Rename..."],
+            )
+            self.assertFalse(first[0]["actions"][0]["waitCursor"])
+            self.assertEqual(
+                [a["name"] for a in first[1]["actions"]],
+                ["About / Diagnostics", "Extension"],
             )
             self.assertEqual(
                 [action["name"] for action in hooks.get_media_panel_custom_ui_actions()[0]["actions"]],
@@ -351,17 +393,34 @@ class HookTests(unittest.TestCase):
                     contexts=("media_panel", "timeline"),
                 )
             )
+            main_root, main_dgpy = hooks.get_main_menu_custom_ui_actions()
             self.assertEqual(
-                [action["name"] for action in hooks.get_main_menu_custom_ui_actions()[0]["actions"]],
-                ["Rename...", "About / Diagnostics"],
+                [action["name"] for action in main_root["actions"]],
+                ["Rename..."],
             )
             self.assertEqual(
-                [action["name"] for action in hooks.get_media_panel_custom_ui_actions()[0]["actions"]],
-                ["Rename...", "Multi"],
+                [action["name"] for action in main_dgpy["actions"]],
+                ["About / Diagnostics"],
+            )
+
+            media_root, media_dgpy = hooks.get_media_panel_custom_ui_actions()
+            self.assertEqual(
+                [action["name"] for action in media_root["actions"]],
+                ["Rename..."],
             )
             self.assertEqual(
-                [action["name"] for action in hooks.get_timeline_custom_ui_actions()[0]["actions"]],
-                ["Rename...", "Multi"],
+                [action["name"] for action in media_dgpy["actions"]],
+                ["Multi"],
+            )
+
+            timeline_root, timeline_dgpy = hooks.get_timeline_custom_ui_actions()
+            self.assertEqual(
+                [action["name"] for action in timeline_root["actions"]],
+                ["Rename..."],
+            )
+            self.assertEqual(
+                [action["name"] for action in timeline_dgpy["actions"]],
+                ["Multi"],
             )
             self.assertEqual(
                 [action["name"] for action in hooks.get_mediahub_files_custom_ui_actions()[0]["actions"]],
@@ -534,6 +593,14 @@ class SelectionBrokerTests(unittest.TestCase):
 
 
 class RenameTests(unittest.TestCase):
+    def test_index_token_helper(self):
+        from dg_python_scripts.ui.rename import _index_token
+
+        self.assertEqual(_index_token(0, 1, 1), "{index}")
+        self.assertEqual(_index_token(3, 1, 1), "{index:###}")
+        self.assertEqual(_index_token(3, 8, -2), "{index:###@8-2}")
+        self.assertEqual(_index_token(4, 10, 5), "{index:####@10+5}")
+
     def test_tokens_and_replace_pipeline(self):
         objects = [FakeObject("A"), FakeObject("B")]
         plan = build_plan(

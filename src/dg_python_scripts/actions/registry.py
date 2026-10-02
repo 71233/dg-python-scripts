@@ -21,6 +21,8 @@ class Action:
     flame_name: str | None = None
     is_visible: Callable[[tuple[Any, ...]], bool] | None = None
     is_enabled: Callable[[tuple[Any, ...]], bool] | None = None
+    hierarchy: tuple[str, ...] | None = None
+    wait_cursor: bool | None = None
 
     def __post_init__(self):
         if not self.id.strip() or not self.caption.strip():
@@ -53,6 +55,13 @@ class Action:
             raise TypeError("is_visible must be callable or None")
         if self.is_enabled is not None and not callable(self.is_enabled):
             raise TypeError("is_enabled must be callable or None")
+        if self.hierarchy is not None:
+            hierarchy = tuple(self.hierarchy)
+            if any(not isinstance(part, str) or not part.strip() for part in hierarchy):
+                raise ValueError("hierarchy entries must be non-empty strings")
+            object.__setattr__(self, "hierarchy", hierarchy)
+        if self.wait_cursor is not None and not isinstance(self.wait_cursor, bool):
+            raise TypeError("wait_cursor must be a bool or None")
 
     @property
     def host_name(self) -> str:
@@ -73,6 +82,8 @@ class Action:
             item["isVisible"] = self.is_visible
         if self.is_enabled is not None:
             item["isEnabled"] = self.is_enabled
+        if self.wait_cursor is not None:
+            item["waitCursor"] = self.wait_cursor
         return item
 
 

@@ -35,5 +35,7 @@ def register_rename_action(registry: ActionRegistry) -> None:
             order=100,
             is_visible=_rename_available,
             is_enabled=_rename_available,
+            hierarchy=(),
+            wait_cursor=False,
         )
     )
