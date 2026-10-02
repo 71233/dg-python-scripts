@@ -29,7 +29,7 @@ def register_rename_action(registry: ActionRegistry) -> None:
     registry.register(
         Action(
             "dgpy.rename",
-            "Rename...",
+            "DGpy Rename...",
             show_rename,
             contexts=_RENAME_CONTEXTS,
             order=100,
@@ -37,5 +37,6 @@ def register_rename_action(registry: ActionRegistry) -> None:
             is_enabled=_rename_available,
             hierarchy=(),
             wait_cursor=False,
+            separator="below",
         )
     )

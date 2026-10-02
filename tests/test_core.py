@@ -103,6 +103,7 @@ class RegistryTests(unittest.TestCase):
             ["Root"],
         )
         self.assertFalse(root_group["actions"][0]["waitCursor"])
+        self.assertNotIn("separator", root_group["actions"][0])
 
         self.assertEqual(dgpy_group["name"], "DGpy")
         self.assertEqual(dgpy_group["hierarchy"], [])
@@ -164,6 +165,8 @@ class RegistryTests(unittest.TestCase):
             Action("one", "One", lambda selection: None, hierarchy=("",))
         with self.assertRaises(TypeError):
             Action("one", "One", lambda selection: None, wait_cursor="no")
+        with self.assertRaises(ValueError):
+            Action("one", "One", lambda selection: None, separator="middle")
 
 
 class RepositoryBoundaryTests(unittest.TestCase):
@@ -265,7 +268,7 @@ class ExtensionTests(unittest.TestCase):
                 root_group, dgpy_group = hooks.get_media_panel_custom_ui_actions()
                 self.assertEqual(
                     [action["name"] for action in root_group["actions"]],
-                    ["Rename..."],
+                    ["DGpy Rename..."],
                 )
                 self.assertEqual(
                     [action["name"] for action in dgpy_group["actions"]],
@@ -360,16 +363,17 @@ class HookTests(unittest.TestCase):
             self.assertEqual(first, second)
             self.assertEqual(
                 [a["name"] for a in first[0]["actions"]],
-                ["Rename..."],
+                ["DGpy Rename..."],
             )
             self.assertFalse(first[0]["actions"][0]["waitCursor"])
+            self.assertEqual(first[0]["actions"][0]["separator"], "below")
             self.assertEqual(
                 [a["name"] for a in first[1]["actions"]],
                 ["About / Diagnostics", "Extension"],
             )
             self.assertEqual(
                 [action["name"] for action in hooks.get_media_panel_custom_ui_actions()[0]["actions"]],
-                ["Rename..."],
+                ["DGpy Rename..."],
             )
             for hook in (
                 hooks.get_mediahub_files_custom_ui_actions,
@@ -380,7 +384,7 @@ class HookTests(unittest.TestCase):
             ):
                 self.assertEqual(
                     [action["name"] for action in hook()[0]["actions"]],
-                    ["Rename..."],
+                    ["DGpy Rename..."],
                 )
 
     def test_multi_context_extension_reaches_only_target_hooks(self):
@@ -396,7 +400,7 @@ class HookTests(unittest.TestCase):
             main_root, main_dgpy = hooks.get_main_menu_custom_ui_actions()
             self.assertEqual(
                 [action["name"] for action in main_root["actions"]],
-                ["Rename..."],
+                ["DGpy Rename..."],
             )
             self.assertEqual(
                 [action["name"] for action in main_dgpy["actions"]],
@@ -406,7 +410,7 @@ class HookTests(unittest.TestCase):
             media_root, media_dgpy = hooks.get_media_panel_custom_ui_actions()
             self.assertEqual(
                 [action["name"] for action in media_root["actions"]],
-                ["Rename..."],
+                ["DGpy Rename..."],
             )
             self.assertEqual(
                 [action["name"] for action in media_dgpy["actions"]],
@@ -416,7 +420,7 @@ class HookTests(unittest.TestCase):
             timeline_root, timeline_dgpy = hooks.get_timeline_custom_ui_actions()
             self.assertEqual(
                 [action["name"] for action in timeline_root["actions"]],
-                ["Rename..."],
+                ["DGpy Rename..."],
             )
             self.assertEqual(
                 [action["name"] for action in timeline_dgpy["actions"]],
@@ -424,19 +428,19 @@ class HookTests(unittest.TestCase):
             )
             self.assertEqual(
                 [action["name"] for action in hooks.get_mediahub_files_custom_ui_actions()[0]["actions"]],
-                ["Rename..."],
+                ["DGpy Rename..."],
             )
             self.assertEqual(
                 [action["name"] for action in hooks.get_mediahub_archives_custom_ui_actions()[0]["actions"]],
-                ["Rename..."],
+                ["DGpy Rename..."],
             )
             self.assertEqual(
                 [action["name"] for action in hooks.get_batch_custom_ui_actions()[0]["actions"]],
-                ["Rename..."],
+                ["DGpy Rename..."],
             )
             self.assertEqual(
                 [action["name"] for action in hooks.get_action_custom_ui_actions()[0]["actions"]],
-                ["Rename..."],
+                ["DGpy Rename..."],
             )
 
     def bootstrap(self):

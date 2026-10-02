@@ -23,6 +23,7 @@ class Action:
     is_enabled: Callable[[tuple[Any, ...]], bool] | None = None
     hierarchy: tuple[str, ...] | None = None
     wait_cursor: bool | None = None
+    separator: str | None = None
 
     def __post_init__(self):
         if not self.id.strip() or not self.caption.strip():
@@ -62,6 +63,8 @@ class Action:
             object.__setattr__(self, "hierarchy", hierarchy)
         if self.wait_cursor is not None and not isinstance(self.wait_cursor, bool):
             raise TypeError("wait_cursor must be a bool or None")
+        if self.separator not in (None, "above", "below"):
+            raise ValueError("separator must be 'above', 'below', or None")
 
     @property
     def host_name(self) -> str:
@@ -84,6 +87,8 @@ class Action:
             item["isEnabled"] = self.is_enabled
         if self.wait_cursor is not None:
             item["waitCursor"] = self.wait_cursor
+        if self.separator is not None:
+            item["separator"] = self.separator
         return item
 
 
