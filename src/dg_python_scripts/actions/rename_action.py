@@ -5,7 +5,6 @@ from dg_python_scripts.rename import can_rename_selection
 
 
 _RENAME_CONTEXTS = (
-    "main_menu",
     "media_panel",
     "mediahub_files",
     "mediahub_archives",

@@ -364,15 +364,11 @@ class HookTests(unittest.TestCase):
             first = hooks.get_main_menu_custom_ui_actions()
             second = hooks.get_main_menu_custom_ui_actions()
             self.assertEqual(first, second)
+            self.assertEqual(len(first), 1)
+            self.assertEqual(first[0]["name"], "DGpy")
+            self.assertEqual(first[0]["separator"], "below")
             self.assertEqual(
                 [a["name"] for a in first[0]["actions"]],
-                ["DGpy Rename..."],
-            )
-            self.assertFalse(first[0]["actions"][0]["waitCursor"])
-            self.assertEqual(first[0]["actions"][0]["separator"], "above")
-            self.assertEqual(first[1]["separator"], "below")
-            self.assertEqual(
-                [a["name"] for a in first[1]["actions"]],
                 ["About / Diagnostics", "Extension"],
             )
             self.assertEqual(
@@ -401,11 +397,7 @@ class HookTests(unittest.TestCase):
                     contexts=("media_panel", "timeline"),
                 )
             )
-            main_root, main_dgpy = hooks.get_main_menu_custom_ui_actions()
-            self.assertEqual(
-                [action["name"] for action in main_root["actions"]],
-                ["DGpy Rename..."],
-            )
+            main_dgpy, = hooks.get_main_menu_custom_ui_actions()
             self.assertEqual(
                 [action["name"] for action in main_dgpy["actions"]],
                 ["About / Diagnostics"],
