@@ -3,10 +3,12 @@
 from .actions.main_menu import register_builtin_actions
 from .actions.menu import build_menu
 from .actions.registry import ActionRegistry
+from .actions.selection import SelectionBroker
 from .config.loader import Config, load_config
 from .extensions.loader import load_extensions
 
 _registry: ActionRegistry | None = None
+_selection_broker = SelectionBroker()
 
 
 def _get_registry(config: Config | None = None) -> ActionRegistry:
@@ -30,7 +32,12 @@ def get_registry() -> ActionRegistry:
 def _get_custom_ui_actions(context: str) -> tuple:
     config = load_config()
     registry = _get_registry(config)
-    return build_menu(registry, context, config.ui.menu_caption)
+    return build_menu(
+        registry,
+        context,
+        config.ui.menu_caption,
+        broker=_selection_broker,
+    )
 
 
 def get_main_menu_custom_ui_actions() -> tuple:

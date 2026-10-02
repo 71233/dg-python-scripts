@@ -1,6 +1,7 @@
 """Exercise registry, config and runtime contracts without Flame or Qt."""
 
 import importlib.util
+from datetime import datetime, timezone
 import os
 from pathlib import Path
 import subprocess
@@ -13,10 +14,17 @@ from unittest.mock import patch
 
 from dg_python_scripts.actions.menu import build_menu
 from dg_python_scripts.actions.registry import ACTION_CONTEXTS, Action, ActionRegistry
+from dg_python_scripts.actions.selection import SelectionBroker
 from dg_python_scripts.config.loader import Config, ExtensionsConfig, UIConfig, load_config
 from dg_python_scripts.extensions.loader import load_extensions
 from dg_python_scripts import hooks
 from dg_python_scripts.runtime import detect_runtime, parse_version
+from dg_python_scripts.rename import (
+    RenameApplyError,
+    ReplacementRule,
+    apply_plan,
+    build_plan,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -29,6 +37,7 @@ class RegistryTests(unittest.TestCase):
         registry.register(Action("ext.two", "Two", received.append))
         group, = build_menu(registry, "main_menu")
         self.assertEqual(group["name"], "DGpy")
+        self.assertEqual(group["separator"], "below")
         self.assertIsInstance(group["actions"], tuple)
         self.assertEqual([a["name"] for a in group["actions"]], ["One", "Two"])
         selection = (object(),)
@@ -74,6 +83,37 @@ class RegistryTests(unittest.TestCase):
         item = build_menu(registry, "media_panel")[0]["actions"][0]
         self.assertEqual(item["order"], 42)
         self.assertEqual(item["minimumVersion"], "2025.2.7")
+
+    def test_root_hierarchy_and_wait_cursor_serialization(self):
+        registry = ActionRegistry()
+        root = Action(
+            "dgpy.root",
+            "Root",
+            lambda selection: None,
+            hierarchy=(),
+            wait_cursor=False,
+        )
+        grouped = Action("dgpy.grouped", "Grouped", lambda selection: None)
+        registry.register_many((root, grouped))
+
+        root_group, dgpy_group = build_menu(registry, "main_menu")
+
+        self.assertEqual(root_group["hierarchy"], [])
+        self.assertNotIn("name", root_group)
+        self.assertEqual(
+            [action["name"] for action in root_group["actions"]],
+            ["Root"],
+        )
+        self.assertFalse(root_group["actions"][0]["waitCursor"])
+        self.assertNotIn("separator", root_group["actions"][0])
+
+        self.assertEqual(dgpy_group["name"], "DGpy")
+        self.assertEqual(dgpy_group["hierarchy"], [])
+        self.assertEqual(dgpy_group["separator"], "below")
+        self.assertEqual(
+            [action["name"] for action in dgpy_group["actions"]],
+            ["Grouped"],
+        )
 
     def test_supported_contexts_are_explicit(self):
         self.assertEqual(
@@ -124,6 +164,12 @@ class RegistryTests(unittest.TestCase):
             Action("one", "One", None)
         with self.assertRaises(ValueError):
             Action("one", "One", lambda selection: None, flame_name=" ")
+        with self.assertRaises(ValueError):
+            Action("one", "One", lambda selection: None, hierarchy=("",))
+        with self.assertRaises(TypeError):
+            Action("one", "One", lambda selection: None, wait_cursor="no")
+        with self.assertRaises(ValueError):
+            Action("one", "One", lambda selection: None, separator="middle")
 
 
 class RepositoryBoundaryTests(unittest.TestCase):
@@ -222,9 +268,14 @@ class ExtensionTests(unittest.TestCase):
                 patch.dict(os.environ, {"DGPY_CONFIG": str(path)}, clear=True),
                 patch.object(hooks, "_registry", None),
             ):
+                root_group, dgpy_group = hooks.get_media_panel_custom_ui_actions()
                 self.assertEqual(
-                    hooks.get_media_panel_custom_ui_actions()[0]["actions"][0]["name"],
-                    "Extension",
+                    [action["name"] for action in root_group["actions"]],
+                    ["DGpy Rename..."],
+                )
+                self.assertEqual(
+                    [action["name"] for action in dgpy_group["actions"]],
+                    ["Extension"],
                 )
                 hooks.get_timeline_custom_ui_actions()
                 hooks.get_main_menu_custom_ui_actions()
@@ -313,13 +364,28 @@ class HookTests(unittest.TestCase):
             first = hooks.get_main_menu_custom_ui_actions()
             second = hooks.get_main_menu_custom_ui_actions()
             self.assertEqual(first, second)
-            self.assertEqual([a["name"] for a in first[0]["actions"]], ["About / Diagnostics", "Extension"])
-            self.assertEqual(hooks.get_media_panel_custom_ui_actions(), ())
+            self.assertEqual(len(first), 1)
+            self.assertEqual(first[0]["name"], "DGpy")
+            self.assertEqual(first[0]["separator"], "below")
+            self.assertEqual(
+                [a["name"] for a in first[0]["actions"]],
+                ["About / Diagnostics", "Extension"],
+            )
+            self.assertEqual(
+                [action["name"] for action in hooks.get_media_panel_custom_ui_actions()[0]["actions"]],
+                ["DGpy Rename..."],
+            )
             self.assertEqual(hooks.get_mediahub_files_custom_ui_actions(), ())
             self.assertEqual(hooks.get_mediahub_archives_custom_ui_actions(), ())
-            self.assertEqual(hooks.get_timeline_custom_ui_actions(), ())
-            self.assertEqual(hooks.get_batch_custom_ui_actions(), ())
-            self.assertEqual(hooks.get_action_custom_ui_actions(), ())
+            for hook in (
+                hooks.get_timeline_custom_ui_actions,
+                hooks.get_batch_custom_ui_actions,
+                hooks.get_action_custom_ui_actions,
+            ):
+                self.assertEqual(
+                    [action["name"] for action in hook()[0]["actions"]],
+                    ["DGpy Rename..."],
+                )
 
     def test_multi_context_extension_reaches_only_target_hooks(self):
         with patch.object(hooks, "_registry", None), patch.dict(os.environ, {}, clear=True):
@@ -331,13 +397,41 @@ class HookTests(unittest.TestCase):
                     contexts=("media_panel", "timeline"),
                 )
             )
-            self.assertEqual(hooks.get_main_menu_custom_ui_actions()[0]["actions"][0]["name"], "About / Diagnostics")
-            self.assertEqual(hooks.get_media_panel_custom_ui_actions()[0]["actions"][0]["name"], "Multi")
-            self.assertEqual(hooks.get_timeline_custom_ui_actions()[0]["actions"][0]["name"], "Multi")
+            main_dgpy, = hooks.get_main_menu_custom_ui_actions()
+            self.assertEqual(
+                [action["name"] for action in main_dgpy["actions"]],
+                ["About / Diagnostics"],
+            )
+
+            media_root, media_dgpy = hooks.get_media_panel_custom_ui_actions()
+            self.assertEqual(
+                [action["name"] for action in media_root["actions"]],
+                ["DGpy Rename..."],
+            )
+            self.assertEqual(
+                [action["name"] for action in media_dgpy["actions"]],
+                ["Multi"],
+            )
+
+            timeline_root, timeline_dgpy = hooks.get_timeline_custom_ui_actions()
+            self.assertEqual(
+                [action["name"] for action in timeline_root["actions"]],
+                ["DGpy Rename..."],
+            )
+            self.assertEqual(
+                [action["name"] for action in timeline_dgpy["actions"]],
+                ["Multi"],
+            )
             self.assertEqual(hooks.get_mediahub_files_custom_ui_actions(), ())
             self.assertEqual(hooks.get_mediahub_archives_custom_ui_actions(), ())
-            self.assertEqual(hooks.get_batch_custom_ui_actions(), ())
-            self.assertEqual(hooks.get_action_custom_ui_actions(), ())
+            self.assertEqual(
+                [action["name"] for action in hooks.get_batch_custom_ui_actions()[0]["actions"]],
+                ["DGpy Rename..."],
+            )
+            self.assertEqual(
+                [action["name"] for action in hooks.get_action_custom_ui_actions()[0]["actions"]],
+                ["DGpy Rename..."],
+            )
 
     def bootstrap(self):
         spec = importlib.util.spec_from_file_location(
@@ -388,6 +482,226 @@ class HookTests(unittest.TestCase):
         )
         result = subprocess.run([sys.executable, "-I", "-S", "-c", code], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
+
+
+
+class FakeNameAttribute:
+    def __init__(self, value):
+        self.value = value
+
+    def get_value(self):
+        return self.value
+
+    def set_value(self, value):
+        self.value = value
+        return True
+
+
+class FakeObject:
+    def __init__(self, name, selected=True):
+        self.name = FakeNameAttribute(name)
+        self.selected = selected
+
+
+class PyBatchIteration(FakeObject):
+    pass
+
+
+class UniqueNameAttribute:
+    def __init__(self, owner, namespace, value):
+        self.owner = owner
+        self.namespace = namespace
+        self.value = value
+
+    def get_value(self):
+        return self.value
+
+    def set_value(self, value):
+        if any(
+            other is not self.owner and other.name.get_value() == value
+            for other in self.namespace
+        ):
+            raise RuntimeError("duplicate")
+        self.value = value
+        return True
+
+
+class UniqueObject:
+    def __init__(self, name, namespace):
+        self.selected = True
+        self.name = UniqueNameAttribute(self, namespace, name)
+        namespace.append(self)
+
+
+class StickyNameAttribute(FakeNameAttribute):
+    def set_value(self, value):
+        return True
+
+
+class StickyObject:
+    def __init__(self, name):
+        self.name = StickyNameAttribute(name)
+        self.selected = True
+
+
+class SelectionBrokerTests(unittest.TestCase):
+    def test_unselected_predicate_target_wins_over_execute_selection(self):
+        received = []
+        action = Action("test.context", "Context", received.append)
+        broker = SelectionBroker()
+        item = broker.bind(action, "media_panel")
+
+        reel = FakeObject("Reel", selected=False)
+        clip = FakeObject("Clip", selected=True)
+        self.assertTrue(item["isVisible"]((reel,)))
+        item["execute"]((clip,))
+
+        self.assertEqual(received, [(reel,)])
+
+    def test_selected_stale_predicate_falls_back_to_execute_selection(self):
+        received = []
+        action = Action("test.shortcut", "Shortcut", received.append)
+        broker = SelectionBroker()
+        item = broker.bind(action, "media_panel")
+
+        first = FakeObject("A", selected=True)
+        second = FakeObject("B", selected=True)
+        item["isVisible"]((first,))
+        first.selected = False
+        item["execute"]((second,))
+
+        self.assertEqual(received, [(second,)])
+
+    def test_same_members_preserve_predicate_order(self):
+        received = []
+        action = Action("test.order", "Order", received.append)
+        broker = SelectionBroker()
+        item = broker.bind(action, "media_panel")
+
+        first = FakeObject("A")
+        second = FakeObject("B")
+        item["isVisible"]((first, second))
+        item["execute"]((second, first))
+
+        self.assertEqual(received, [(first, second)])
+
+
+class RenameTests(unittest.TestCase):
+    def test_index_token_helper(self):
+        from dg_python_scripts.ui.rename import _index_token
+
+        self.assertEqual(_index_token(0, 1, 1), "{index}")
+        self.assertEqual(_index_token(3, 1, 1), "{index:###}")
+        self.assertEqual(_index_token(3, 8, -2), "{index:###@8-2}")
+        self.assertEqual(_index_token(4, 10, 5), "{index:####@10+5}")
+
+    def test_tokens_and_sequential_replace_pipeline(self):
+        objects = [FakeObject("A"), FakeObject("B")]
+        plan = build_plan(
+            objects,
+            "{name}_{date:%Y%m%d}_{index:###@8-2}_foo",
+            now=datetime(2026, 10, 2, tzinfo=timezone.utc),
+            replacements=(
+                ReplacementRule("foo", "bar"),
+                ReplacementRule("bar", "baz"),
+            ),
+        )
+
+        self.assertEqual(
+            [row.new_name for row in plan.rows],
+            ["A_20261002_008_baz", "B_20261002_006_baz"],
+        )
+        self.assertEqual([row.status for row in plan.rows], ["ready", "ready"])
+        self.assertEqual(
+            plan.replacements,
+            (
+                ReplacementRule("foo", "bar"),
+                ReplacementRule("bar", "baz"),
+            ),
+        )
+
+    def test_empty_replacement_find_is_skipped(self):
+        plan = build_plan(
+            (FakeObject("A"),),
+            "{name}",
+            now=datetime(2026, 10, 2, tzinfo=timezone.utc),
+            replacements=(
+                ReplacementRule("", "SHOULD_NOT_APPEAR"),
+                ReplacementRule("A", "B"),
+            ),
+        )
+        self.assertEqual(plan.rows[0].new_name, "B")
+
+    def test_legacy_single_replace_api_still_works(self):
+        plan = build_plan(
+            (FakeObject("foo"),),
+            "{name}",
+            find="foo",
+            replace="bar",
+            now=datetime(2026, 10, 2, tzinfo=timezone.utc),
+        )
+        self.assertEqual(plan.rows[0].new_name, "bar")
+
+    def test_representative_preview_prefers_first_changed_item(self):
+        from dg_python_scripts.ui.rename import _representative_row
+
+        plan = build_plan(
+            (FakeObject("A"), FakeObject("B")),
+            "{name}",
+            now=datetime(2026, 10, 2, tzinfo=timezone.utc),
+            replacements=(ReplacementRule("B", "C"),),
+        )
+        representative = _representative_row(plan)
+        self.assertIsNotNone(representative)
+        self.assertEqual(representative.original_name, "B")
+        self.assertEqual(representative.new_name, "C")
+
+    def test_unsupported_items_do_not_consume_index(self):
+        unsupported = SimpleNamespace(name=None, selected=True)
+        plan = build_plan(
+            (unsupported, FakeObject("A")),
+            "{index:###}",
+            now=datetime(2026, 10, 2, tzinfo=timezone.utc),
+        )
+        self.assertEqual(plan.rows[0].status, "unsupported")
+        self.assertEqual(plan.rows[1].new_name, "001")
+
+    def test_batch_iteration_is_known_unsupported(self):
+        plan = build_plan(
+            (PyBatchIteration("Iteration"),),
+            "{name}_x",
+            now=datetime(2026, 10, 2, tzinfo=timezone.utc),
+        )
+        self.assertEqual(plan.rows[0].status, "unsupported")
+
+    def test_swap_succeeds_in_unique_namespace_via_temporary_phase(self):
+        namespace = []
+        first = UniqueObject("2", namespace)
+        second = UniqueObject("1", namespace)
+        plan = build_plan(
+            (first, second),
+            "{index}",
+            now=datetime(2026, 10, 2, tzinfo=timezone.utc),
+        )
+
+        result = apply_plan(plan)
+
+        self.assertEqual(result.changed, 2)
+        self.assertEqual(first.name.get_value(), "1")
+        self.assertEqual(second.name.get_value(), "2")
+
+    def test_readback_mismatch_is_failure(self):
+        obj = StickyObject("A")
+        plan = build_plan(
+            (obj,),
+            "B",
+            now=datetime(2026, 10, 2, tzinfo=timezone.utc),
+        )
+
+        with self.assertRaises(RenameApplyError):
+            apply_plan(plan)
+
+        self.assertEqual(obj.name.get_value(), "A")
 
 
 if __name__ == "__main__":

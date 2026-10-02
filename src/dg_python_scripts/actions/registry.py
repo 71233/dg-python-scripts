@@ -19,6 +19,11 @@ class Action:
     order: int | None = None
     minimum_version: str | None = None
     flame_name: str | None = None
+    is_visible: Callable[[tuple[Any, ...]], bool] | None = None
+    is_enabled: Callable[[tuple[Any, ...]], bool] | None = None
+    hierarchy: tuple[str, ...] | None = None
+    wait_cursor: bool | None = None
+    separator: str | None = None
 
     def __post_init__(self):
         if not self.id.strip() or not self.caption.strip():
@@ -47,6 +52,19 @@ class Action:
             not isinstance(self.flame_name, str) or not self.flame_name.strip()
         ):
             raise ValueError("flame_name must be a non-empty string or None")
+        if self.is_visible is not None and not callable(self.is_visible):
+            raise TypeError("is_visible must be callable or None")
+        if self.is_enabled is not None and not callable(self.is_enabled):
+            raise TypeError("is_enabled must be callable or None")
+        if self.hierarchy is not None:
+            hierarchy = tuple(self.hierarchy)
+            if any(not isinstance(part, str) or not part.strip() for part in hierarchy):
+                raise ValueError("hierarchy entries must be non-empty strings")
+            object.__setattr__(self, "hierarchy", hierarchy)
+        if self.wait_cursor is not None and not isinstance(self.wait_cursor, bool):
+            raise TypeError("wait_cursor must be a bool or None")
+        if self.separator not in (None, "above", "below"):
+            raise ValueError("separator must be 'above', 'below', or None")
 
     @property
     def host_name(self) -> str:
@@ -63,6 +81,14 @@ class Action:
             item["order"] = self.order
         if self.minimum_version is not None:
             item["minimumVersion"] = self.minimum_version
+        if self.is_visible is not None:
+            item["isVisible"] = self.is_visible
+        if self.is_enabled is not None:
+            item["isEnabled"] = self.is_enabled
+        if self.wait_cursor is not None:
+            item["waitCursor"] = self.wait_cursor
+        if self.separator is not None:
+            item["separator"] = self.separator
         return item
 
 
