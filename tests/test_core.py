@@ -325,7 +325,10 @@ class HookTests(unittest.TestCase):
                 [a["name"] for a in first[0]["actions"]],
                 ["Rename...", "About / Diagnostics", "Extension"],
             )
-            self.assertEqual(hooks.get_media_panel_custom_ui_actions(), ())
+            self.assertEqual(
+                [action["name"] for action in hooks.get_media_panel_custom_ui_actions()[0]["actions"]],
+                ["Rename..."],
+            )
             self.assertEqual(hooks.get_mediahub_files_custom_ui_actions(), ())
             self.assertEqual(hooks.get_mediahub_archives_custom_ui_actions(), ())
             self.assertEqual(hooks.get_timeline_custom_ui_actions(), ())
