@@ -12,7 +12,7 @@ from dg_python_scripts.rename import (
     apply_plan,
     build_plan,
 )
-from .theme import STYLESHEET
+from .theme import MUTED, STYLESHEET
 
 
 def _index_token(digits: int, start: int, step: int) -> str:
@@ -39,7 +39,7 @@ def _representative_row(plan):
 
 
 def show_rename_dialog(selection=()) -> None:
-    from PySide6 import QtCore, QtWidgets
+    from PySide6 import QtCore, QtGui, QtWidgets
 
     app = QtWidgets.QApplication.instance()
     if app is None:
@@ -58,6 +58,63 @@ def show_rename_dialog(selection=()) -> None:
     root.setContentsMargins(24, 22, 24, 22)
     root.setSpacing(16)
 
+    def symbol_icon(kind: str, size: int = 16):
+        pixmap = QtGui.QPixmap(size, size)
+        pixmap.fill(QtCore.Qt.GlobalColor.transparent)
+
+        painter = QtGui.QPainter(pixmap)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
+
+        pen = QtGui.QPen(QtGui.QColor(MUTED))
+        pen.setWidthF(1.8)
+        pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen)
+
+        center = size / 2
+        margin = 4.5
+
+        if kind == "plus":
+            painter.drawLine(
+                QtCore.QPointF(center, margin),
+                QtCore.QPointF(center, size - margin),
+            )
+            painter.drawLine(
+                QtCore.QPointF(margin, center),
+                QtCore.QPointF(size - margin, center),
+            )
+        elif kind == "close":
+            painter.drawLine(
+                QtCore.QPointF(margin, margin),
+                QtCore.QPointF(size - margin, size - margin),
+            )
+            painter.drawLine(
+                QtCore.QPointF(size - margin, margin),
+                QtCore.QPointF(margin, size - margin),
+            )
+        else:
+            painter.end()
+            raise ValueError(f"Unknown symbol icon: {kind}")
+
+        painter.end()
+        return QtGui.QIcon(pixmap)
+
+    add_icon = symbol_icon("plus")
+    close_icon = symbol_icon("close")
+
+    def make_clearable(edit) -> None:
+        action = edit.addAction(
+            close_icon,
+            QtWidgets.QLineEdit.ActionPosition.TrailingPosition,
+        )
+        action.setToolTip("Clear")
+        action.setVisible(bool(edit.text()))
+        action.triggered.connect(edit.clear)
+        edit.textChanged.connect(
+            lambda text, current_action=action: current_action.setVisible(
+                bool(text)
+            )
+        )
+
     def section_label(text: str):
         label = QtWidgets.QLabel(text)
         label.setObjectName("sectionLabel")
@@ -71,7 +128,7 @@ def show_rename_dialog(selection=()) -> None:
 
     template_edit = QtWidgets.QLineEdit("{name}")
     template_edit.setPlaceholderText("Rename pattern")
-    template_edit.setClearButtonEnabled(True)
+    make_clearable(template_edit)
     pattern_row.addWidget(template_edit, 1)
 
     name_button = QtWidgets.QToolButton()
@@ -129,7 +186,7 @@ def show_rename_dialog(selection=()) -> None:
 
         find_edit = QtWidgets.QLineEdit(find_text)
         find_edit.setPlaceholderText("Find")
-        find_edit.setClearButtonEnabled(True)
+        make_clearable(find_edit)
 
         arrow_label = QtWidgets.QLabel("→")
         arrow_label.setObjectName("arrowLabel")
@@ -137,20 +194,21 @@ def show_rename_dialog(selection=()) -> None:
 
         replace_edit = QtWidgets.QLineEdit(replace_text)
         replace_edit.setPlaceholderText("Replace with")
-        replace_edit.setClearButtonEnabled(True)
+        make_clearable(replace_edit)
 
         is_first = not replacement_rows
         action_button = QtWidgets.QToolButton()
-        action_button.setFixedWidth(34)
+        action_button.setFixedSize(34, 34)
+        action_button.setIconSize(QtCore.QSize(16, 16))
         action_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
 
         if is_first:
             action_button.setObjectName("addRuleButton")
-            action_button.setText("+")
+            action_button.setIcon(add_icon)
             action_button.setToolTip("Add replacement rule")
         else:
             action_button.setObjectName("removeRuleButton")
-            action_button.setText("×")
+            action_button.setIcon(close_icon)
             action_button.setToolTip("Remove replacement rule")
 
         row = {
