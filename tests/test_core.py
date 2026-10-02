@@ -375,9 +375,9 @@ class HookTests(unittest.TestCase):
                 [action["name"] for action in hooks.get_media_panel_custom_ui_actions()[0]["actions"]],
                 ["DGpy Rename..."],
             )
+            self.assertEqual(hooks.get_mediahub_files_custom_ui_actions(), ())
+            self.assertEqual(hooks.get_mediahub_archives_custom_ui_actions(), ())
             for hook in (
-                hooks.get_mediahub_files_custom_ui_actions,
-                hooks.get_mediahub_archives_custom_ui_actions,
                 hooks.get_timeline_custom_ui_actions,
                 hooks.get_batch_custom_ui_actions,
                 hooks.get_action_custom_ui_actions,
@@ -422,14 +422,8 @@ class HookTests(unittest.TestCase):
                 [action["name"] for action in timeline_dgpy["actions"]],
                 ["Multi"],
             )
-            self.assertEqual(
-                [action["name"] for action in hooks.get_mediahub_files_custom_ui_actions()[0]["actions"]],
-                ["DGpy Rename..."],
-            )
-            self.assertEqual(
-                [action["name"] for action in hooks.get_mediahub_archives_custom_ui_actions()[0]["actions"]],
-                ["DGpy Rename..."],
-            )
+            self.assertEqual(hooks.get_mediahub_files_custom_ui_actions(), ())
+            self.assertEqual(hooks.get_mediahub_archives_custom_ui_actions(), ())
             self.assertEqual(
                 [action["name"] for action in hooks.get_batch_custom_ui_actions()[0]["actions"]],
                 ["DGpy Rename..."],
