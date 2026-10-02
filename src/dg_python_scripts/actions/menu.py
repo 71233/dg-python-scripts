@@ -52,6 +52,7 @@ def build_menu(
             {
                 "name": caption,
                 "hierarchy": [],
+                "separator": "below",
                 "actions": tuple(default_items),
             }
         )
