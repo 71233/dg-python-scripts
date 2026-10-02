@@ -28,8 +28,7 @@ QLabel#sectionLabel {{
     font-weight: 600;
 }}
 
-QLabel#arrowLabel,
-QLabel#previewArrow {{
+QLabel#arrowLabel {{
     color: {MUTED};
     font-size: 16px;
 }}
@@ -40,15 +39,16 @@ QLabel#previewTitle {{
     font-weight: 600;
 }}
 
-QLabel#previewName,
-QLabel#previewNameNew {{
-    color: {FOREGROUND};
-    font-size: 15px;
-    font-weight: 500;
+QLabel#previewName {{
+    color: {MUTED};
+    font-size: 12px;
+    font-weight: 400;
 }}
 
 QLabel#previewNameNew {{
-    color: {ACCENT};
+    color: {FOREGROUND};
+    font-size: 16px;
+    font-weight: 600;
 }}
 
 QLabel#summaryLabel {{

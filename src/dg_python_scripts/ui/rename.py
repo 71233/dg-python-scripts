@@ -125,29 +125,19 @@ def show_rename_dialog(selection=()) -> None:
     preview_title.setObjectName("previewTitle")
     preview_layout.addWidget(preview_title)
 
-    preview_names = QtWidgets.QHBoxLayout()
-    preview_names.setSpacing(12)
-
     current_preview = QtWidgets.QLabel()
     current_preview.setObjectName("previewName")
     current_preview.setTextInteractionFlags(
         QtCore.Qt.TextInteractionFlag.TextSelectableByMouse
     )
-
-    preview_arrow = QtWidgets.QLabel("→")
-    preview_arrow.setObjectName("previewArrow")
-    preview_arrow.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+    preview_layout.addWidget(current_preview)
 
     new_preview = QtWidgets.QLabel()
     new_preview.setObjectName("previewNameNew")
     new_preview.setTextInteractionFlags(
         QtCore.Qt.TextInteractionFlag.TextSelectableByMouse
     )
-
-    preview_names.addWidget(current_preview, 1)
-    preview_names.addWidget(preview_arrow)
-    preview_names.addWidget(new_preview, 1)
-    preview_layout.addLayout(preview_names)
+    preview_layout.addWidget(new_preview)
 
     root.addWidget(preview_card)
 
@@ -308,7 +298,9 @@ def show_rename_dialog(selection=()) -> None:
             current_preview.setText(representative.original_name or "")
             new_preview.setText(representative.new_name or "")
 
-        parts = [f"{len(plan.rows)} items", f"{changes} changes"]
+        item_count = len(plan.rows)
+        item_label = "item" if item_count == 1 else "items"
+        parts = [f"{item_count} {item_label}", f"{changes} changes"]
         if unsupported:
             parts.append(f"{unsupported} unsupported")
         summary_label.setText("  •  ".join(parts))
