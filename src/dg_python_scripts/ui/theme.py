@@ -33,12 +33,6 @@ QLabel#arrowLabel {{
     font-size: 16px;
 }}
 
-QLabel#previewTitle {{
-    color: {MUTED};
-    font-size: 11px;
-    font-weight: 600;
-}}
-
 QLabel#previewName {{
     color: {MUTED};
     font-size: 12px;
@@ -93,6 +87,30 @@ QToolButton {{
 
 QToolButton#tokenButton {{
     padding: 6px 11px;
+}}
+
+QToolButton#addRuleButton {{
+    background-color: transparent;
+    color: {MUTED};
+    border: 1px solid {BORDER};
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 16px;
+    font-weight: 500;
+}}
+
+QToolButton#removeRuleButton {{
+    background-color: transparent;
+    color: {MUTED};
+    border: 0;
+    padding: 2px 4px;
+    font-size: 18px;
+}}
+
+QToolButton#addRuleButton:hover,
+QToolButton#removeRuleButton:hover {{
+    color: {FOREGROUND};
+    background-color: {SURFACE_RAISED};
 }}
 
 QPushButton:hover,
