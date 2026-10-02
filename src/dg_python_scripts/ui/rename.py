@@ -6,6 +6,7 @@ from datetime import datetime
 
 from dg_python_scripts.rename import (
     RenameApplyError,
+    ReplacementRule,
     StaleRenameError,
     TemplateError,
     apply_plan,
@@ -29,6 +30,9 @@ def _index_token(digits: int, start: int, step: int) -> str:
 
 def _representative_row(plan):
     for row in plan.rows:
+        if row.status == "ready":
+            return row
+    for row in plan.rows:
         if row.status != "unsupported":
             return row
     return None
@@ -46,13 +50,13 @@ def show_rename_dialog(selection=()) -> None:
 
     dialog = QtWidgets.QDialog(app.activeWindow())
     dialog.setWindowTitle("DGpy — Rename")
-    dialog.resize(720, 340)
+    dialog.resize(720, 360)
     dialog.setMinimumWidth(620)
     dialog.setStyleSheet(STYLESHEET)
 
     root = QtWidgets.QVBoxLayout(dialog)
     root.setContentsMargins(24, 22, 24, 22)
-    root.setSpacing(18)
+    root.setSpacing(16)
 
     def section_label(text: str):
         label = QtWidgets.QLabel(text)
@@ -87,43 +91,104 @@ def show_rename_dialog(selection=()) -> None:
 
     root.addLayout(pattern_row)
 
-    # Find / Replace
+    # Find / Replace rules
     replace_header = QtWidgets.QHBoxLayout()
     replace_header.setContentsMargins(0, 0, 0, 0)
+    replace_header.setSpacing(8)
     replace_header.addWidget(section_label("Find & Replace"))
     replace_header.addStretch(1)
+
+    add_rule_button = QtWidgets.QToolButton()
+    add_rule_button.setObjectName("addRuleButton")
+    add_rule_button.setText("+")
+    add_rule_button.setToolTip("Add replacement rule")
+    add_rule_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+    replace_header.addWidget(add_rule_button)
     root.addLayout(replace_header)
 
-    replace_row = QtWidgets.QHBoxLayout()
-    replace_row.setSpacing(10)
+    replacement_rows_layout = QtWidgets.QVBoxLayout()
+    replacement_rows_layout.setSpacing(8)
+    root.addLayout(replacement_rows_layout)
 
-    find_edit = QtWidgets.QLineEdit()
-    find_edit.setPlaceholderText("Find")
-    find_edit.setClearButtonEnabled(True)
+    replacement_rows: list[dict[str, object]] = []
+    state = {"plan": None}
 
-    arrow_label = QtWidgets.QLabel("→")
-    arrow_label.setObjectName("arrowLabel")
-    arrow_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+    def current_rules() -> tuple[ReplacementRule, ...]:
+        return tuple(
+            ReplacementRule(
+                row["find"].text(),
+                row["replace"].text(),
+            )
+            for row in replacement_rows
+        )
 
-    replace_edit = QtWidgets.QLineEdit()
-    replace_edit.setPlaceholderText("Replace with")
-    replace_edit.setClearButtonEnabled(True)
+    def schedule_resize() -> None:
+        QtCore.QTimer.singleShot(0, dialog.adjustSize)
 
-    replace_row.addWidget(find_edit, 1)
-    replace_row.addWidget(arrow_label)
-    replace_row.addWidget(replace_edit, 1)
-    root.addLayout(replace_row)
+    def remove_rule(row) -> None:
+        if row not in replacement_rows or len(replacement_rows) <= 1:
+            return
+        replacement_rows.remove(row)
+        row["widget"].deleteLater()
+        refresh_preview()
+        schedule_resize()
 
-    # Compact representative preview card.
+    def add_rule(find_text: str = "", replace_text: str = "") -> None:
+        row_widget = QtWidgets.QWidget()
+        row_layout = QtWidgets.QHBoxLayout(row_widget)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.setSpacing(10)
+
+        find_edit = QtWidgets.QLineEdit(find_text)
+        find_edit.setPlaceholderText("Find")
+        find_edit.setClearButtonEnabled(True)
+
+        arrow_label = QtWidgets.QLabel("→")
+        arrow_label.setObjectName("arrowLabel")
+        arrow_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+
+        replace_edit = QtWidgets.QLineEdit(replace_text)
+        replace_edit.setPlaceholderText("Replace with")
+        replace_edit.setClearButtonEnabled(True)
+
+        remove_button = QtWidgets.QToolButton()
+        remove_button.setObjectName("removeRuleButton")
+        remove_button.setText("×")
+        remove_button.setToolTip("Remove replacement rule")
+        remove_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+
+        row = {
+            "widget": row_widget,
+            "find": find_edit,
+            "replace": replace_edit,
+            "remove": remove_button,
+        }
+        replacement_rows.append(row)
+
+        row_layout.addWidget(find_edit, 1)
+        row_layout.addWidget(arrow_label)
+        row_layout.addWidget(replace_edit, 1)
+        row_layout.addWidget(remove_button)
+
+        replacement_rows_layout.addWidget(row_widget)
+
+        # The first rule always remains available. Additional rules can be removed.
+        remove_button.setVisible(len(replacement_rows) > 1)
+        find_edit.textChanged.connect(refresh_preview)
+        replace_edit.textChanged.connect(refresh_preview)
+        remove_button.clicked.connect(lambda checked=False, value=row: remove_rule(value))
+
+        refresh_preview()
+        schedule_resize()
+
+    # Preview label follows the same hierarchy as Pattern / Find & Replace.
+    root.addWidget(section_label("Preview"))
+
     preview_card = QtWidgets.QFrame()
     preview_card.setObjectName("previewCard")
     preview_layout = QtWidgets.QVBoxLayout(preview_card)
-    preview_layout.setContentsMargins(16, 14, 16, 14)
-    preview_layout.setSpacing(8)
-
-    preview_title = QtWidgets.QLabel("Preview")
-    preview_title.setObjectName("previewTitle")
-    preview_layout.addWidget(preview_title)
+    preview_layout.setContentsMargins(16, 12, 16, 12)
+    preview_layout.setSpacing(6)
 
     current_preview = QtWidgets.QLabel()
     current_preview.setObjectName("previewName")
@@ -166,8 +231,6 @@ def show_rename_dialog(selection=()) -> None:
     footer.addWidget(cancel_button)
     footer.addWidget(rename_button)
     root.addLayout(footer)
-
-    state = {"plan": None}
 
     def insert_token(token: str) -> None:
         template_edit.insert(token)
@@ -271,9 +334,8 @@ def show_rename_dialog(selection=()) -> None:
             plan = build_plan(
                 selected,
                 template_edit.text(),
-                find_edit.text(),
-                replace_edit.text(),
                 now=frozen_now,
+                replacements=current_rules(),
             )
         except TemplateError as error:
             state["plan"] = None
@@ -300,7 +362,8 @@ def show_rename_dialog(selection=()) -> None:
 
         item_count = len(plan.rows)
         item_label = "item" if item_count == 1 else "items"
-        parts = [f"{item_count} {item_label}", f"{changes} changes"]
+        change_label = "change" if changes == 1 else "changes"
+        parts = [f"{item_count} {item_label}", f"{changes} {change_label}"]
         if unsupported:
             parts.append(f"{unsupported} unsupported")
         summary_label.setText("  •  ".join(parts))
@@ -324,11 +387,11 @@ def show_rename_dialog(selection=()) -> None:
         dialog.accept()
 
     template_edit.textChanged.connect(refresh_preview)
-    find_edit.textChanged.connect(refresh_preview)
-    replace_edit.textChanged.connect(refresh_preview)
+    add_rule_button.clicked.connect(lambda: add_rule())
     cancel_button.clicked.connect(dialog.reject)
     rename_button.clicked.connect(apply_current_plan)
 
+    add_rule()
     refresh_preview()
     template_edit.setFocus()
     dialog.exec()

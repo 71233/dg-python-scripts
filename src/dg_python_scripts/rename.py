@@ -38,6 +38,17 @@ class RenameApplyError(RenameError):
 
 
 @dataclass(frozen=True)
+class ReplacementRule:
+    find: str
+    replace: str
+
+    def apply(self, value: str) -> str:
+        if not self.find:
+            return value
+        return value.replace(self.find, self.replace)
+
+
+@dataclass(frozen=True)
 class RenameTarget:
     obj: Any
     name_attribute: Any
@@ -59,9 +70,11 @@ class RenamePreviewRow:
 class RenamePlan:
     rows: tuple[RenamePreviewRow, ...]
     template: str
-    find: str
-    replace: str
+    replacements: tuple[ReplacementRule, ...]
     frozen_now: datetime
+    # Retained for compatibility with the original single-rule API.
+    find: str = ""
+    replace: str = ""
 
     @property
     def ready_rows(self) -> tuple[RenamePreviewRow, ...]:
@@ -169,16 +182,32 @@ def render_template(
     return "".join(output)
 
 
+def _replacement_rules(
+    replacements: Iterable[ReplacementRule],
+    legacy_find: str,
+    legacy_replace: str,
+) -> tuple[ReplacementRule, ...]:
+    rules = tuple(replacements)
+    if any(not isinstance(rule, ReplacementRule) for rule in rules):
+        raise TypeError("replacements must contain ReplacementRule values")
+    if legacy_find:
+        return (ReplacementRule(legacy_find, legacy_replace),) + rules
+    return rules
+
+
 def build_plan(
     selection: Iterable[Any],
     template: str,
     find: str = "",
     replace: str = "",
     now: datetime | None = None,
+    *,
+    replacements: Iterable[ReplacementRule] = (),
 ) -> RenamePlan:
     frozen_now = now or datetime.now().astimezone()
     rows: list[RenamePreviewRow] = []
     rename_position = 0
+    rules = _replacement_rules(replacements, find, replace)
 
     # Validate syntax even when every selected object is unsupported.
     render_template(template, "", 0, frozen_now)
@@ -204,8 +233,10 @@ def build_plan(
             frozen_now,
         )
         rename_position += 1
-        if find:
-            new_name = new_name.replace(find, replace)
+
+        # Replacement rules intentionally compose from top to bottom.
+        for rule in rules:
+            new_name = rule.apply(new_name)
 
         status = "unchanged" if new_name == target.original_name else "ready"
         rows.append(
@@ -221,9 +252,10 @@ def build_plan(
     return RenamePlan(
         rows=tuple(rows),
         template=template,
+        replacements=rules,
+        frozen_now=frozen_now,
         find=find,
         replace=replace,
-        frozen_now=frozen_now,
     )
 
 

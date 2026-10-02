@@ -21,6 +21,7 @@ from dg_python_scripts import hooks
 from dg_python_scripts.runtime import detect_runtime, parse_version
 from dg_python_scripts.rename import (
     RenameApplyError,
+    ReplacementRule,
     apply_plan,
     build_plan,
 )
@@ -608,21 +609,66 @@ class RenameTests(unittest.TestCase):
         self.assertEqual(_index_token(3, 8, -2), "{index:###@8-2}")
         self.assertEqual(_index_token(4, 10, 5), "{index:####@10+5}")
 
-    def test_tokens_and_replace_pipeline(self):
+    def test_tokens_and_sequential_replace_pipeline(self):
         objects = [FakeObject("A"), FakeObject("B")]
         plan = build_plan(
             objects,
             "{name}_{date:%Y%m%d}_{index:###@8-2}_foo",
-            find="foo",
-            replace="bar",
             now=datetime(2026, 10, 2, tzinfo=timezone.utc),
+            replacements=(
+                ReplacementRule("foo", "bar"),
+                ReplacementRule("bar", "baz"),
+            ),
         )
 
         self.assertEqual(
             [row.new_name for row in plan.rows],
-            ["A_20261002_008_bar", "B_20261002_006_bar"],
+            ["A_20261002_008_baz", "B_20261002_006_baz"],
         )
         self.assertEqual([row.status for row in plan.rows], ["ready", "ready"])
+        self.assertEqual(
+            plan.replacements,
+            (
+                ReplacementRule("foo", "bar"),
+                ReplacementRule("bar", "baz"),
+            ),
+        )
+
+    def test_empty_replacement_find_is_skipped(self):
+        plan = build_plan(
+            (FakeObject("A"),),
+            "{name}",
+            now=datetime(2026, 10, 2, tzinfo=timezone.utc),
+            replacements=(
+                ReplacementRule("", "SHOULD_NOT_APPEAR"),
+                ReplacementRule("A", "B"),
+            ),
+        )
+        self.assertEqual(plan.rows[0].new_name, "B")
+
+    def test_legacy_single_replace_api_still_works(self):
+        plan = build_plan(
+            (FakeObject("foo"),),
+            "{name}",
+            find="foo",
+            replace="bar",
+            now=datetime(2026, 10, 2, tzinfo=timezone.utc),
+        )
+        self.assertEqual(plan.rows[0].new_name, "bar")
+
+    def test_representative_preview_prefers_first_changed_item(self):
+        from dg_python_scripts.ui.rename import _representative_row
+
+        plan = build_plan(
+            (FakeObject("A"), FakeObject("B")),
+            "{name}",
+            now=datetime(2026, 10, 2, tzinfo=timezone.utc),
+            replacements=(ReplacementRule("B", "C"),),
+        )
+        representative = _representative_row(plan)
+        self.assertIsNotNone(representative)
+        self.assertEqual(representative.original_name, "B")
+        self.assertEqual(representative.new_name, "C")
 
     def test_unsupported_items_do_not_consume_index(self):
         unsupported = SimpleNamespace(name=None, selected=True)
