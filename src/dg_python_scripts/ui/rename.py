@@ -92,19 +92,7 @@ def show_rename_dialog(selection=()) -> None:
     root.addLayout(pattern_row)
 
     # Find / Replace rules
-    replace_header = QtWidgets.QHBoxLayout()
-    replace_header.setContentsMargins(0, 0, 0, 0)
-    replace_header.setSpacing(8)
-    replace_header.addWidget(section_label("Find & Replace"))
-    replace_header.addStretch(1)
-
-    add_rule_button = QtWidgets.QToolButton()
-    add_rule_button.setObjectName("addRuleButton")
-    add_rule_button.setText("+")
-    add_rule_button.setToolTip("Add replacement rule")
-    add_rule_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
-    replace_header.addWidget(add_rule_button)
-    root.addLayout(replace_header)
+    root.addWidget(section_label("Find & Replace"))
 
     replacement_rows_layout = QtWidgets.QVBoxLayout()
     replacement_rows_layout.setSpacing(8)
@@ -151,32 +139,43 @@ def show_rename_dialog(selection=()) -> None:
         replace_edit.setPlaceholderText("Replace with")
         replace_edit.setClearButtonEnabled(True)
 
-        remove_button = QtWidgets.QToolButton()
-        remove_button.setObjectName("removeRuleButton")
-        remove_button.setText("×")
-        remove_button.setToolTip("Remove replacement rule")
-        remove_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+        is_first = not replacement_rows
+        action_button = QtWidgets.QToolButton()
+        action_button.setFixedWidth(34)
+        action_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+
+        if is_first:
+            action_button.setObjectName("addRuleButton")
+            action_button.setText("+")
+            action_button.setToolTip("Add replacement rule")
+        else:
+            action_button.setObjectName("removeRuleButton")
+            action_button.setText("×")
+            action_button.setToolTip("Remove replacement rule")
 
         row = {
             "widget": row_widget,
             "find": find_edit,
             "replace": replace_edit,
-            "remove": remove_button,
+            "action": action_button,
         }
         replacement_rows.append(row)
 
         row_layout.addWidget(find_edit, 1)
         row_layout.addWidget(arrow_label)
         row_layout.addWidget(replace_edit, 1)
-        row_layout.addWidget(remove_button)
+        row_layout.addWidget(action_button)
 
         replacement_rows_layout.addWidget(row_widget)
 
-        # The first rule always remains available. Additional rules can be removed.
-        remove_button.setVisible(len(replacement_rows) > 1)
         find_edit.textChanged.connect(refresh_preview)
         replace_edit.textChanged.connect(refresh_preview)
-        remove_button.clicked.connect(lambda checked=False, value=row: remove_rule(value))
+        if is_first:
+            action_button.clicked.connect(lambda: add_rule())
+        else:
+            action_button.clicked.connect(
+                lambda checked=False, value=row: remove_rule(value)
+            )
 
         refresh_preview()
         schedule_resize()
@@ -387,7 +386,6 @@ def show_rename_dialog(selection=()) -> None:
         dialog.accept()
 
     template_edit.textChanged.connect(refresh_preview)
-    add_rule_button.clicked.connect(lambda: add_rule())
     cancel_button.clicked.connect(dialog.reject)
     rename_button.clicked.connect(apply_current_plan)
 
