@@ -1,6 +1,7 @@
 """Exercise registry, config and runtime contracts without Flame or Qt."""
 
 import importlib.util
+from datetime import datetime, timezone
 import os
 from pathlib import Path
 import subprocess
@@ -13,10 +14,16 @@ from unittest.mock import patch
 
 from dg_python_scripts.actions.menu import build_menu
 from dg_python_scripts.actions.registry import ACTION_CONTEXTS, Action, ActionRegistry
+from dg_python_scripts.actions.selection import SelectionBroker
 from dg_python_scripts.config.loader import Config, ExtensionsConfig, UIConfig, load_config
 from dg_python_scripts.extensions.loader import load_extensions
 from dg_python_scripts import hooks
 from dg_python_scripts.runtime import detect_runtime, parse_version
+from dg_python_scripts.rename import (
+    RenameApplyError,
+    apply_plan,
+    build_plan,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -388,6 +395,173 @@ class HookTests(unittest.TestCase):
         )
         result = subprocess.run([sys.executable, "-I", "-S", "-c", code], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
+
+
+
+class FakeNameAttribute:
+    def __init__(self, value):
+        self.value = value
+
+    def get_value(self):
+        return self.value
+
+    def set_value(self, value):
+        self.value = value
+        return True
+
+
+class FakeObject:
+    def __init__(self, name, selected=True):
+        self.name = FakeNameAttribute(name)
+        self.selected = selected
+
+
+class PyBatchIteration(FakeObject):
+    pass
+
+
+class UniqueNameAttribute:
+    def __init__(self, owner, namespace, value):
+        self.owner = owner
+        self.namespace = namespace
+        self.value = value
+
+    def get_value(self):
+        return self.value
+
+    def set_value(self, value):
+        if any(
+            other is not self.owner and other.name.get_value() == value
+            for other in self.namespace
+        ):
+            raise RuntimeError("duplicate")
+        self.value = value
+        return True
+
+
+class UniqueObject:
+    def __init__(self, name, namespace):
+        self.selected = True
+        self.name = UniqueNameAttribute(self, namespace, name)
+        namespace.append(self)
+
+
+class StickyNameAttribute(FakeNameAttribute):
+    def set_value(self, value):
+        return True
+
+
+class StickyObject:
+    def __init__(self, name):
+        self.name = StickyNameAttribute(name)
+        self.selected = True
+
+
+class SelectionBrokerTests(unittest.TestCase):
+    def test_unselected_predicate_target_wins_over_execute_selection(self):
+        received = []
+        action = Action("test.context", "Context", received.append)
+        broker = SelectionBroker()
+        item = broker.bind(action, "media_panel")
+
+        reel = FakeObject("Reel", selected=False)
+        clip = FakeObject("Clip", selected=True)
+        self.assertTrue(item["isVisible"]((reel,)))
+        item["execute"]((clip,))
+
+        self.assertEqual(received, [(reel,)])
+
+    def test_selected_stale_predicate_falls_back_to_execute_selection(self):
+        received = []
+        action = Action("test.shortcut", "Shortcut", received.append)
+        broker = SelectionBroker()
+        item = broker.bind(action, "media_panel")
+
+        first = FakeObject("A", selected=True)
+        second = FakeObject("B", selected=True)
+        item["isVisible"]((first,))
+        first.selected = False
+        item["execute"]((second,))
+
+        self.assertEqual(received, [(second,)])
+
+    def test_same_members_preserve_predicate_order(self):
+        received = []
+        action = Action("test.order", "Order", received.append)
+        broker = SelectionBroker()
+        item = broker.bind(action, "media_panel")
+
+        first = FakeObject("A")
+        second = FakeObject("B")
+        item["isVisible"]((first, second))
+        item["execute"]((second, first))
+
+        self.assertEqual(received, [(first, second)])
+
+
+class RenameTests(unittest.TestCase):
+    def test_tokens_and_replace_pipeline(self):
+        objects = [FakeObject("A"), FakeObject("B")]
+        plan = build_plan(
+            objects,
+            "{name}_{date:%Y%m%d}_{index:###@8-2}_foo",
+            find="foo",
+            replace="bar",
+            now=datetime(2026, 10, 2, tzinfo=timezone.utc),
+        )
+
+        self.assertEqual(
+            [row.new_name for row in plan.rows],
+            ["A_20261002_008_bar", "B_20261002_006_bar"],
+        )
+        self.assertEqual([row.status for row in plan.rows], ["ready", "ready"])
+
+    def test_unsupported_items_do_not_consume_index(self):
+        unsupported = SimpleNamespace(name=None, selected=True)
+        plan = build_plan(
+            (unsupported, FakeObject("A")),
+            "{index:###}",
+            now=datetime(2026, 10, 2, tzinfo=timezone.utc),
+        )
+        self.assertEqual(plan.rows[0].status, "unsupported")
+        self.assertEqual(plan.rows[1].new_name, "001")
+
+    def test_batch_iteration_is_known_unsupported(self):
+        plan = build_plan(
+            (PyBatchIteration("Iteration"),),
+            "{name}_x",
+            now=datetime(2026, 10, 2, tzinfo=timezone.utc),
+        )
+        self.assertEqual(plan.rows[0].status, "unsupported")
+
+    def test_swap_succeeds_in_unique_namespace_via_temporary_phase(self):
+        namespace = []
+        first = UniqueObject("2", namespace)
+        second = UniqueObject("1", namespace)
+        plan = build_plan(
+            (first, second),
+            "{index}",
+            now=datetime(2026, 10, 2, tzinfo=timezone.utc),
+        )
+
+        result = apply_plan(plan)
+
+        self.assertEqual(result.changed, 2)
+        self.assertEqual(first.name.get_value(), "1")
+        self.assertEqual(second.name.get_value(), "2")
+
+    def test_readback_mismatch_is_failure(self):
+        obj = StickyObject("A")
+        plan = build_plan(
+            (obj,),
+            "B",
+            now=datetime(2026, 10, 2, tzinfo=timezone.utc),
+        )
+
+        with self.assertRaises(RenameApplyError):
+            apply_plan(plan)
+
+        self.assertEqual(obj.name.get_value(), "A")
 
 
 if __name__ == "__main__":
