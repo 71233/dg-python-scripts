@@ -36,6 +36,7 @@ class RegistryTests(unittest.TestCase):
         registry.register(Action("ext.two", "Two", received.append))
         group, = build_menu(registry, "main_menu")
         self.assertEqual(group["name"], "DGpy")
+        self.assertEqual(group["separator"], "below")
         self.assertIsInstance(group["actions"], tuple)
         self.assertEqual([a["name"] for a in group["actions"]], ["One", "Two"])
         selection = (object(),)
@@ -107,6 +108,7 @@ class RegistryTests(unittest.TestCase):
 
         self.assertEqual(dgpy_group["name"], "DGpy")
         self.assertEqual(dgpy_group["hierarchy"], [])
+        self.assertEqual(dgpy_group["separator"], "below")
         self.assertEqual(
             [action["name"] for action in dgpy_group["actions"]],
             ["Grouped"],
@@ -366,7 +368,8 @@ class HookTests(unittest.TestCase):
                 ["DGpy Rename..."],
             )
             self.assertFalse(first[0]["actions"][0]["waitCursor"])
-            self.assertEqual(first[0]["actions"][0]["separator"], "below")
+            self.assertEqual(first[0]["actions"][0]["separator"], "above")
+            self.assertEqual(first[1]["separator"], "below")
             self.assertEqual(
                 [a["name"] for a in first[1]["actions"]],
                 ["About / Diagnostics", "Extension"],
