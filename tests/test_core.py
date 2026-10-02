@@ -229,10 +229,11 @@ class ExtensionTests(unittest.TestCase):
                 patch.dict(os.environ, {"DGPY_CONFIG": str(path)}, clear=True),
                 patch.object(hooks, "_registry", None),
             ):
-                self.assertEqual(
-                    hooks.get_media_panel_custom_ui_actions()[0]["actions"][0]["name"],
-                    "Extension",
-                )
+                names = [
+                    action["name"]
+                    for action in hooks.get_media_panel_custom_ui_actions()[0]["actions"]
+                ]
+                self.assertEqual(names, ["Rename...", "Extension"])
                 hooks.get_timeline_custom_ui_actions()
                 hooks.get_main_menu_custom_ui_actions()
 
@@ -320,7 +321,10 @@ class HookTests(unittest.TestCase):
             first = hooks.get_main_menu_custom_ui_actions()
             second = hooks.get_main_menu_custom_ui_actions()
             self.assertEqual(first, second)
-            self.assertEqual([a["name"] for a in first[0]["actions"]], ["About / Diagnostics", "Extension"])
+            self.assertEqual(
+                [a["name"] for a in first[0]["actions"]],
+                ["Rename...", "About / Diagnostics", "Extension"],
+            )
             self.assertEqual(hooks.get_media_panel_custom_ui_actions(), ())
             self.assertEqual(hooks.get_mediahub_files_custom_ui_actions(), ())
             self.assertEqual(hooks.get_mediahub_archives_custom_ui_actions(), ())
@@ -338,13 +342,34 @@ class HookTests(unittest.TestCase):
                     contexts=("media_panel", "timeline"),
                 )
             )
-            self.assertEqual(hooks.get_main_menu_custom_ui_actions()[0]["actions"][0]["name"], "About / Diagnostics")
-            self.assertEqual(hooks.get_media_panel_custom_ui_actions()[0]["actions"][0]["name"], "Multi")
-            self.assertEqual(hooks.get_timeline_custom_ui_actions()[0]["actions"][0]["name"], "Multi")
-            self.assertEqual(hooks.get_mediahub_files_custom_ui_actions(), ())
-            self.assertEqual(hooks.get_mediahub_archives_custom_ui_actions(), ())
-            self.assertEqual(hooks.get_batch_custom_ui_actions(), ())
-            self.assertEqual(hooks.get_action_custom_ui_actions(), ())
+            self.assertEqual(
+                [action["name"] for action in hooks.get_main_menu_custom_ui_actions()[0]["actions"]],
+                ["Rename...", "About / Diagnostics"],
+            )
+            self.assertEqual(
+                [action["name"] for action in hooks.get_media_panel_custom_ui_actions()[0]["actions"]],
+                ["Rename...", "Multi"],
+            )
+            self.assertEqual(
+                [action["name"] for action in hooks.get_timeline_custom_ui_actions()[0]["actions"]],
+                ["Rename...", "Multi"],
+            )
+            self.assertEqual(
+                [action["name"] for action in hooks.get_mediahub_files_custom_ui_actions()[0]["actions"]],
+                ["Rename..."],
+            )
+            self.assertEqual(
+                [action["name"] for action in hooks.get_mediahub_archives_custom_ui_actions()[0]["actions"]],
+                ["Rename..."],
+            )
+            self.assertEqual(
+                [action["name"] for action in hooks.get_batch_custom_ui_actions()[0]["actions"]],
+                ["Rename..."],
+            )
+            self.assertEqual(
+                [action["name"] for action in hooks.get_action_custom_ui_actions()[0]["actions"]],
+                ["Rename..."],
+            )
 
     def bootstrap(self):
         spec = importlib.util.spec_from_file_location(
