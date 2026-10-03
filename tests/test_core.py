@@ -299,7 +299,7 @@ class ExtensionTests(unittest.TestCase):
                 self.assertEqual(sequence_group["hierarchy"], ["DGpy Sequence"])
                 self.assertEqual(
                     [action["name"] for action in sequence_group["actions"]],
-                    ["DGpy Delete Markers"],
+                    ["Delete Markers"],
                 )
                 self.assertEqual(
                     [action["caption"] for action in sequence_group["actions"]],
@@ -407,7 +407,7 @@ class HookTests(unittest.TestCase):
             self.assertEqual(sequence_group["hierarchy"], ["DGpy Sequence"])
             self.assertEqual(
                 [action["name"] for action in sequence_group["actions"]],
-                ["DGpy Delete Markers"],
+                ["Delete Markers"],
             )
             self.assertEqual(
                 [action["caption"] for action in sequence_group["actions"]],
@@ -453,7 +453,7 @@ class HookTests(unittest.TestCase):
             self.assertEqual(sequence_group["hierarchy"], ["DGpy Sequence"])
             self.assertEqual(
                 [action["name"] for action in sequence_group["actions"]],
-                ["DGpy Delete Markers"],
+                ["Delete Markers"],
             )
             self.assertEqual(
                 [action["caption"] for action in sequence_group["actions"]],
