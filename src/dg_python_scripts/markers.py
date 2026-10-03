@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Iterable
 
 _TARGET_CLASS_NAMES = frozenset({"PyClip", "PySequence"})
-_PARENT_CLASS_NAMES = frozenset({"PyReel", "PyFolder", "PyLibrary"})
+_PARENT_CLASS_NAMES = frozenset({"PyReel"})
 
 
 class MarkerDeleteError(RuntimeError):
