@@ -1,4 +1,4 @@
-"""Discover clip/sequence marker targets and delete their markers."""
+"""Discover direct clip/sequence marker targets and delete their markers."""
 
 from __future__ import annotations
 
@@ -6,10 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Iterable
 
 _TARGET_CLASS_NAMES = frozenset({"PyClip", "PySequence"})
-_ROOT_CONTAINER_CLASS_NAMES = frozenset({"PyReel", "PyFolder", "PyLibrary"})
-_TRAVERSABLE_CONTAINER_CLASS_NAMES = frozenset(
-    {"PyReel", "PyFolder", "PyLibrary", "PyReelGroup"}
-)
+_PARENT_CLASS_NAMES = frozenset({"PyReel", "PyFolder", "PyLibrary"})
 
 
 class MarkerDeleteError(RuntimeError):
@@ -83,55 +80,53 @@ def _as_tuple(value: Any, *, label: str) -> tuple[Any, ...]:
 
 
 def can_delete_markers_selection(selection: Iterable[Any]) -> bool:
-    """Return True without recursively traversing potentially large containers."""
-
     try:
         items = tuple(selection)
     except Exception:
         return False
 
-    supported = _TARGET_CLASS_NAMES | _ROOT_CONTAINER_CLASS_NAMES
+    supported = _TARGET_CLASS_NAMES | _PARENT_CLASS_NAMES
     return any(_class_name(obj) in supported for obj in items)
 
 
 def collect_marker_targets(selection: Iterable[Any]) -> tuple[Any, ...]:
-    """Expand selected media containers and return unique Clip/Sequence targets."""
+    """Return selected targets plus direct clips/sequences from selected parents."""
 
-    roots = _as_tuple(selection, label="selection")
+    selected = _as_tuple(selection, label="selection")
     targets: list[Any] = []
     seen: set[int] = set()
 
-    def visit(obj: Any) -> None:
+    def add(obj: Any) -> None:
         key = id(obj)
         if key in seen:
             return
         seen.add(key)
+        targets.append(obj)
 
+    for obj in selected:
         class_name = _class_name(obj)
         if class_name in _TARGET_CLASS_NAMES:
-            targets.append(obj)
-            return
+            add(obj)
+            continue
 
-        if class_name not in _TRAVERSABLE_CONTAINER_CLASS_NAMES:
-            return
+        if class_name not in _PARENT_CLASS_NAMES:
+            continue
 
-        try:
-            children = getattr(obj, "children")
-        except Exception as error:
-            raise MarkerDeleteError(
-                f"Could not read children from {_display_name(obj)!r}: "
-                f"{type(error).__name__}: {error}"
-            ) from error
+        for attribute_name in ("clips", "sequences"):
+            try:
+                children = getattr(obj, attribute_name)
+            except Exception as error:
+                raise MarkerDeleteError(
+                    f"Could not read {attribute_name} from {_display_name(obj)!r}: "
+                    f"{type(error).__name__}: {error}"
+                ) from error
 
-        for child in _as_tuple(children, label=f"children of {_display_name(obj)!r}"):
-            visit(child)
-
-    for root in roots:
-        class_name = _class_name(root)
-        if class_name in _TARGET_CLASS_NAMES:
-            visit(root)
-        elif class_name in _ROOT_CONTAINER_CLASS_NAMES:
-            visit(root)
+            for child in _as_tuple(
+                children,
+                label=f"{attribute_name} of {_display_name(obj)!r}",
+            ):
+                if _class_name(child) in _TARGET_CLASS_NAMES:
+                    add(child)
 
     return tuple(targets)
 
@@ -163,7 +158,7 @@ def apply_delete_plan(
     plan: MarkerDeletePlan,
     delete_marker: Callable[[Any], Any],
 ) -> MarkerDeleteResult:
-    """Delete the captured markers and verify each target by exact read-back."""
+    """Delete captured markers one at a time and verify exact read-back."""
 
     if not callable(delete_marker):
         raise TypeError("delete_marker must be callable")
