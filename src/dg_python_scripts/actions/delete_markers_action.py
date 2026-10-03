@@ -10,12 +10,7 @@ from dg_python_scripts.markers import (
 )
 
 
-_MARKER_CONTEXTS = (
-    "media_panel",
-    "timeline",
-    "batch",
-    "action",
-)
+_MARKER_CONTEXTS = ("media_panel",)
 
 
 def _marker_action_available(selection) -> bool:
@@ -109,14 +104,14 @@ def register_delete_markers_action(registry: ActionRegistry) -> None:
     registry.register(
         Action(
             "dgpy.delete_markers",
-            "DGpy Delete Markers...",
+            "Delete Markers",
             show_delete_markers,
             contexts=_MARKER_CONTEXTS,
             order=110,
             is_visible=_marker_action_available,
             is_enabled=_marker_action_available,
-            hierarchy=(),
+            hierarchy=("DGpy Sequence",),
             wait_cursor=False,
-            separator="below",
+            separator=None,
         )
     )
