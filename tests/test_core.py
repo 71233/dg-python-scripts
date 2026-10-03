@@ -299,6 +299,10 @@ class ExtensionTests(unittest.TestCase):
                 self.assertEqual(sequence_group["hierarchy"], ["DGpy Sequence"])
                 self.assertEqual(
                     [action["name"] for action in sequence_group["actions"]],
+                    ["DGpy Delete Markers"],
+                )
+                self.assertEqual(
+                    [action["caption"] for action in sequence_group["actions"]],
                     ["Delete Markers"],
                 )
                 hooks.get_timeline_custom_ui_actions()
