@@ -65,15 +65,15 @@ class MarkerTests(unittest.TestCase):
         self.assertTrue(can_delete_markers_selection((PyClip("A"),)))
         self.assertTrue(can_delete_markers_selection((PySequence("S"),)))
         self.assertTrue(can_delete_markers_selection((PyReel("R"),)))
-        self.assertTrue(can_delete_markers_selection((PyFolder("F"),)))
-        self.assertTrue(can_delete_markers_selection((PyLibrary("L"),)))
+        self.assertFalse(can_delete_markers_selection((PyFolder("F"),)))
+        self.assertFalse(can_delete_markers_selection((PyLibrary("L"),)))
         self.assertFalse(can_delete_markers_selection((PyReelGroup("G"),)))
         self.assertFalse(can_delete_markers_selection((PyNode(),)))
 
     def test_parent_collects_only_direct_clips_and_sequences(self):
         clip = PyClip("A")
         sequence = PySequence("S")
-        parent = PyFolder("Folder", clips=(clip,), sequences=(sequence,))
+        parent = PyReel("Reel", clips=(clip,), sequences=(sequence,))
 
         self.assertEqual(collect_marker_targets((parent,)), (clip, sequence))
 
