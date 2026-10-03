@@ -106,7 +106,6 @@ def register_delete_markers_action(registry: ActionRegistry) -> None:
             show_delete_markers,
             contexts=_MARKER_CONTEXTS,
             order=110,
-            flame_name="DGpy Delete Markers",
             is_visible=_marker_action_available,
             is_enabled=_marker_action_available,
             hierarchy=("DGpy Sequence",),
