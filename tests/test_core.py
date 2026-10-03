@@ -115,6 +115,25 @@ class RegistryTests(unittest.TestCase):
             ["Grouped"],
         )
 
+    def test_explicit_hierarchy_serialization(self):
+        registry = ActionRegistry()
+        registry.register(
+            Action(
+                "dgpy.sequence.test",
+                "Sequence Action",
+                lambda selection: None,
+                contexts=("media_panel",),
+                hierarchy=("DGpy Sequence",),
+            )
+        )
+
+        group, = build_menu(registry, "media_panel")
+        self.assertEqual(group["hierarchy"], ["DGpy Sequence"])
+        self.assertEqual(
+            [action["name"] for action in group["actions"]],
+            ["Sequence Action"],
+        )
+
     def test_supported_contexts_are_explicit(self):
         self.assertEqual(
             ACTION_CONTEXTS,
@@ -268,14 +287,19 @@ class ExtensionTests(unittest.TestCase):
                 patch.dict(os.environ, {"DGPY_CONFIG": str(path)}, clear=True),
                 patch.object(hooks, "_registry", None),
             ):
-                root_group, dgpy_group = hooks.get_media_panel_custom_ui_actions()
+                root_group, dgpy_group, sequence_group = hooks.get_media_panel_custom_ui_actions()
                 self.assertEqual(
                     [action["name"] for action in root_group["actions"]],
-                    ["DGpy Rename...", "DGpy Delete Markers..."],
+                    ["DGpy Rename..."],
                 )
                 self.assertEqual(
                     [action["name"] for action in dgpy_group["actions"]],
                     ["Extension"],
+                )
+                self.assertEqual(sequence_group["hierarchy"], ["DGpy Sequence"])
+                self.assertEqual(
+                    [action["name"] for action in sequence_group["actions"]],
+                    ["Delete Markers"],
                 )
                 hooks.get_timeline_custom_ui_actions()
                 hooks.get_main_menu_custom_ui_actions()
@@ -371,9 +395,15 @@ class HookTests(unittest.TestCase):
                 [a["name"] for a in first[0]["actions"]],
                 ["About / Diagnostics", "Extension"],
             )
+            media_root, sequence_group = hooks.get_media_panel_custom_ui_actions()
             self.assertEqual(
-                [action["name"] for action in hooks.get_media_panel_custom_ui_actions()[0]["actions"]],
-                ["DGpy Rename...", "DGpy Delete Markers..."],
+                [action["name"] for action in media_root["actions"]],
+                ["DGpy Rename..."],
+            )
+            self.assertEqual(sequence_group["hierarchy"], ["DGpy Sequence"])
+            self.assertEqual(
+                [action["name"] for action in sequence_group["actions"]],
+                ["Delete Markers"],
             )
             self.assertEqual(hooks.get_mediahub_files_custom_ui_actions(), ())
             self.assertEqual(hooks.get_mediahub_archives_custom_ui_actions(), ())
@@ -384,7 +414,7 @@ class HookTests(unittest.TestCase):
             ):
                 self.assertEqual(
                     [action["name"] for action in hook()[0]["actions"]],
-                    ["DGpy Rename...", "DGpy Delete Markers..."],
+                    ["DGpy Rename..."],
                 )
 
     def test_multi_context_extension_reaches_only_target_hooks(self):
@@ -403,20 +433,25 @@ class HookTests(unittest.TestCase):
                 ["About / Diagnostics"],
             )
 
-            media_root, media_dgpy = hooks.get_media_panel_custom_ui_actions()
+            media_root, media_dgpy, sequence_group = hooks.get_media_panel_custom_ui_actions()
             self.assertEqual(
                 [action["name"] for action in media_root["actions"]],
-                ["DGpy Rename...", "DGpy Delete Markers..."],
+                ["DGpy Rename..."],
             )
             self.assertEqual(
                 [action["name"] for action in media_dgpy["actions"]],
                 ["Multi"],
             )
+            self.assertEqual(sequence_group["hierarchy"], ["DGpy Sequence"])
+            self.assertEqual(
+                [action["name"] for action in sequence_group["actions"]],
+                ["Delete Markers"],
+            )
 
             timeline_root, timeline_dgpy = hooks.get_timeline_custom_ui_actions()
             self.assertEqual(
                 [action["name"] for action in timeline_root["actions"]],
-                ["DGpy Rename...", "DGpy Delete Markers..."],
+                ["DGpy Rename..."],
             )
             self.assertEqual(
                 [action["name"] for action in timeline_dgpy["actions"]],
@@ -426,11 +461,11 @@ class HookTests(unittest.TestCase):
             self.assertEqual(hooks.get_mediahub_archives_custom_ui_actions(), ())
             self.assertEqual(
                 [action["name"] for action in hooks.get_batch_custom_ui_actions()[0]["actions"]],
-                ["DGpy Rename...", "DGpy Delete Markers..."],
+                ["DGpy Rename..."],
             )
             self.assertEqual(
                 [action["name"] for action in hooks.get_action_custom_ui_actions()[0]["actions"]],
-                ["DGpy Rename...", "DGpy Delete Markers..."],
+                ["DGpy Rename..."],
             )
 
     def bootstrap(self):
