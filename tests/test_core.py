@@ -407,6 +407,10 @@ class HookTests(unittest.TestCase):
             self.assertEqual(sequence_group["hierarchy"], ["DGpy Sequence"])
             self.assertEqual(
                 [action["name"] for action in sequence_group["actions"]],
+                ["DGpy Delete Markers"],
+            )
+            self.assertEqual(
+                [action["caption"] for action in sequence_group["actions"]],
                 ["Delete Markers"],
             )
             self.assertEqual(hooks.get_mediahub_files_custom_ui_actions(), ())
@@ -449,6 +453,10 @@ class HookTests(unittest.TestCase):
             self.assertEqual(sequence_group["hierarchy"], ["DGpy Sequence"])
             self.assertEqual(
                 [action["name"] for action in sequence_group["actions"]],
+                ["DGpy Delete Markers"],
+            )
+            self.assertEqual(
+                [action["caption"] for action in sequence_group["actions"]],
                 ["Delete Markers"],
             )
 
