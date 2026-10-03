@@ -77,13 +77,13 @@ class MarkerTests(unittest.TestCase):
 
         self.assertEqual(collect_marker_targets((parent,)), (clip, sequence))
 
-    def test_parent_does_not_recurse_into_nested_containers(self):
+    def test_reel_does_not_recurse_into_nested_containers(self):
         nested_clip = PyClip("Nested")
         nested_reel = PyReel("Nested Reel", clips=(nested_clip,))
-        folder = PyFolder("Folder")
-        folder.reels = [nested_reel]
+        reel = PyReel("Outer Reel")
+        reel.reels = [nested_reel]
 
-        self.assertEqual(collect_marker_targets((folder,)), ())
+        self.assertEqual(collect_marker_targets((reel,)), ())
 
     def test_direct_and_parent_duplicate_target_is_deduplicated(self):
         clip = PyClip("A")
