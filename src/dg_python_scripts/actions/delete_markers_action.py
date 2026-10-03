@@ -58,15 +58,13 @@ def show_delete_markers(selection=()) -> None:
         )
         return
 
-    target_count = len(plan.marked_targets)
+    marker_label = "marker" if plan.total_markers == 1 else "markers"
     answer = _show_dialog(
         flame,
         "DGpy Delete Markers",
         (
-            f"Delete {plan.total_markers} marker(s) from "
-            f"{target_count} Clip/Sequence target(s)?\n\n"
-            "Only Clip/Sequence markers are removed. Segment markers are not affected.\n"
-            "DGpy cannot roll back marker deletion after it starts."
+            f"Delete {plan.total_markers} {marker_label}?\n\n"
+            "This action cannot be undone."
         ),
         "warning",
         ("Delete Markers",),
