@@ -34,16 +34,13 @@ class PySequence(PyClip):
 
 
 class _Container:
-    def __init__(self, name, children=()):
+    def __init__(self, name, clips=(), sequences=()):
         self.name = FakeName(name)
-        self.children = list(children)
+        self.clips = list(clips)
+        self.sequences = list(sequences)
 
 
 class PyReel(_Container):
-    pass
-
-
-class PyReelGroup(_Container):
     pass
 
 
@@ -55,12 +52,16 @@ class PyLibrary(_Container):
     pass
 
 
+class PyReelGroup(_Container):
+    pass
+
+
 class PyNode:
     pass
 
 
 class MarkerTests(unittest.TestCase):
-    def test_predicate_accepts_direct_targets_and_supported_root_containers(self):
+    def test_predicate_accepts_direct_targets_and_supported_parents(self):
         self.assertTrue(can_delete_markers_selection((PyClip("A"),)))
         self.assertTrue(can_delete_markers_selection((PySequence("S"),)))
         self.assertTrue(can_delete_markers_selection((PyReel("R"),)))
@@ -69,33 +70,37 @@ class MarkerTests(unittest.TestCase):
         self.assertFalse(can_delete_markers_selection((PyReelGroup("G"),)))
         self.assertFalse(can_delete_markers_selection((PyNode(),)))
 
-    def test_children_recursion_collects_clip_and_sequence_targets(self):
+    def test_parent_collects_only_direct_clips_and_sequences(self):
         clip = PyClip("A")
         sequence = PySequence("S")
-        nested = PyFolder(
-            "Folder",
-            (
-                PyReel("Reel", (clip,)),
-                PyReelGroup("Group", (PyReel("Nested", (sequence,)),)),
-            ),
-        )
+        parent = PyFolder("Folder", clips=(clip,), sequences=(sequence,))
 
-        self.assertEqual(collect_marker_targets((nested,)), (clip, sequence))
+        self.assertEqual(collect_marker_targets((parent,)), (clip, sequence))
 
-    def test_direct_and_nested_duplicate_target_is_deduplicated(self):
+    def test_parent_does_not_recurse_into_nested_containers(self):
+        nested_clip = PyClip("Nested")
+        nested_reel = PyReel("Nested Reel", clips=(nested_clip,))
+        folder = PyFolder("Folder")
+        folder.reels = [nested_reel]
+
+        self.assertEqual(collect_marker_targets((folder,)), ())
+
+    def test_direct_and_parent_duplicate_target_is_deduplicated(self):
         clip = PyClip("A")
-        reel = PyReel("R", (clip,))
+        reel = PyReel("R", clips=(clip,))
         self.assertEqual(collect_marker_targets((clip, reel)), (clip,))
 
-    def test_unsupported_children_are_ignored(self):
-        clip = PyClip("A")
-        folder = PyFolder("F", (PyNode(), clip))
-        self.assertEqual(collect_marker_targets((folder,)), (clip,))
+    def test_duplicate_between_clips_and_sequences_is_deduplicated(self):
+        sequence = PySequence("S")
+        reel = PyReel("R", clips=(sequence,), sequences=(sequence,))
+        self.assertEqual(collect_marker_targets((reel,)), (sequence,))
 
     def test_plan_counts_markers_per_target(self):
         clip = PyClip("A", (PyMarker(), PyMarker()))
         sequence = PySequence("S", (PyMarker(),))
-        plan = build_delete_plan((PyReel("R", (clip, sequence)),))
+        plan = build_delete_plan(
+            (PyReel("R", clips=(clip,), sequences=(sequence,)),)
+        )
 
         self.assertEqual(len(plan.targets), 2)
         self.assertEqual(plan.total_markers, 3)
