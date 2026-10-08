@@ -397,7 +397,7 @@ class HookTests(unittest.TestCase):
             self.assertEqual(first[0]["separator"], "below")
             self.assertEqual(
                 [a["name"] for a in first[0]["actions"]],
-                ["About / Diagnostics", "Extension"],
+                ["Status HUD Probe...", "About / Diagnostics", "Extension"],
             )
             media_root, sequence_group = hooks.get_media_panel_custom_ui_actions()
             self.assertEqual(
@@ -438,7 +438,7 @@ class HookTests(unittest.TestCase):
             main_dgpy, = hooks.get_main_menu_custom_ui_actions()
             self.assertEqual(
                 [action["name"] for action in main_dgpy["actions"]],
-                ["About / Diagnostics"],
+                ["Status HUD Probe...", "About / Diagnostics"],
             )
 
             media_root, media_dgpy, sequence_group = hooks.get_media_panel_custom_ui_actions()
