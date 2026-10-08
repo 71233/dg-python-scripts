@@ -3,6 +3,7 @@
 from .delete_markers_action import register_delete_markers_action
 from .registry import Action, ActionRegistry
 from .rename_action import register_rename_action
+from .status_probe_action import register_status_probe_action
 
 
 def show_about(selection=()) -> None:
@@ -15,6 +16,7 @@ def show_about(selection=()) -> None:
 def register_builtin_actions(registry: ActionRegistry) -> None:
     register_rename_action(registry)
     register_delete_markers_action(registry)
+    register_status_probe_action(registry)
     registry.register(
         Action(
             "dgpy.about",
