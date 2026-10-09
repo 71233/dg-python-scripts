@@ -66,7 +66,7 @@ Flame Hook領域への配置は自動で行いません。
 
 ## 開発環境の更新とFlame配置
 
-Mac/Linux共通の `dgpy-update`、`dgpy-status`、`dgpy-switch`、`dgpy-setup` を追加しました。
+Mac/Linux共通の `dgpy-update`、`dgpy-status`、`dgpy-switch`、`dgpy-setup`、`dgpy-flame` を提供します。
 既存配置と作業中の変更を保護し、必要なbootstrap／Probeだけをsymlinkします。
 setup/statusは指定hook先・`DL_PYTHON_HOOK_PATH`・追加の `--check-hook-dir` にある
 重複候補も確認します。共有／project／version別hook先は明示して検査してください。
@@ -74,17 +74,20 @@ setup/statusは指定hook先・`DL_PYTHON_HOOK_PATH`・追加の `--check-hook-d
 [DEV_WORKFLOW](docs/DEV_WORKFLOW.md)を参照してください。
 
 ```sh
-python3 tools/dgpy_dev.py install --apply
+/bin/sh tools/dgpy install --apply
 export PATH="$HOME/DGpy/bin:$PATH"
 dgpy-setup                   # まずプレビュー
 dgpy-setup --apply
-eval "$(dgpy-setup env)"     # 同じシェルからFlameを起動
+dgpy-flame --dry-run         # 起動前の検査だけ
+dgpy-flame                   # セッション環境でFlame 2025.2.7を起動
 dgpy-status
 ```
 
 既定checkoutは `~/DGpy/dg-python-scripts` と `~/DGpy/dg-python-scripts-internal`。
 異なる親ディレクトリは `DGPY_ROOT` または `--root` を指定します。
-コード更新後はFlameを再起動して確認します。新しいsetupの実機検証は未実施です。
+コード更新後はFlameを再起動して確認します。shell入口はFlame付属Pythonを優先するため、
+LinuxのOS Python 3.6.8ではhelperを読み込みません。既存binは上書きせず新しいbinへ導入します。
+従来メニューはMac/Linuxでユーザー確認済み。新launcherと直接commandの実機検証は未実施です。
 
 ## 作業再開と仕様の保存先
 

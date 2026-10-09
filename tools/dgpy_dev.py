@@ -7,6 +7,7 @@ import fcntl
 import os
 from pathlib import Path
 import platform
+import re
 import shlex
 import subprocess
 import sys
@@ -186,6 +187,7 @@ def duplicate_hooks(args, plan):
 
 
 def status(args):
+    print(f"Python: {sys.executable} ({platform.python_version()})")
     failed = False
     for key, repo in repositories(args):
         branch = git(repo, "symbolic-ref", "--quiet", "--short", "HEAD", check=False)
@@ -242,7 +244,7 @@ def setup(args):
     print("Symlinks ready. Use env before launching Flame; verify other hook search paths for duplicate hooks.")
 
 
-def environment(args):
+def source_paths(args):
     root = args.root.expanduser().resolve()
     paths = [root / "dg-python-scripts/src"]
     if args.with_internal:
@@ -250,6 +252,11 @@ def environment(args):
     for path in paths:
         if not path.is_dir() or ":" in str(path):
             raise Unsafe(f"Invalid source path: {path}")
+    return paths
+
+
+def environment(args):
+    paths = source_paths(args)
     exports = ["export PYTHONPATH=" + shlex.quote(":".join(map(str, paths))) + '${PYTHONPATH:+:$PYTHONPATH}']
     if args.config:
         path = args.config.expanduser().resolve()
@@ -259,13 +266,97 @@ def environment(args):
     print("\n".join(exports))
 
 
+def flame_executable(args):
+    """Use the vendor launcher with its logical path (FlameFamily may be a link)."""
+    selected = args.flame_executable or os.environ.get("DGPY_FLAME_EXECUTABLE")
+    if selected:
+        executable = Path(selected).expanduser()
+        if not executable.is_absolute():
+            raise Unsafe("Flame executable must be an absolute path")
+    else:
+        system = platform.system()
+        if system not in ("Darwin", "Linux"):
+            raise Unsafe("Flame launcher supports macOS/Linux only")
+        candidates = [Path("/opt/Autodesk/flame_2025.2.7/bin/startApplication")]
+        if system == "Linux":
+            candidates.insert(0, Path("/opt/Autodesk/.flamefamily_2025.2.7/bin/startApplication"))
+        executable = next((path for path in candidates if path.is_file()), candidates[0])
+    if (executable.name != "startApplication" or executable.parent.name != "bin"
+            or executable.parent.parent.name not in ("flame_2025.2.7", ".flamefamily_2025.2.7")):
+        raise Unsafe("Use Flame 2025.2.7 bin/startApplication, not a GUI app or custom wrapper")
+    if not executable.is_file() or not os.access(executable, os.X_OK):
+        raise Unsafe(f"Flame launcher missing/not executable: {executable}")
+    version = executable.parent.parent / "VERSION"
+    if not re.fullmatch(r'#define VERSION "2025\.2\.7"', version.read_text().strip()):
+        raise Unsafe(f"Flame VERSION is not 2025.2.7: {version}")
+    return executable
+
+
+def launch_flame(args):
+    executable = flame_executable(args)
+    paths = source_paths(args)
+    plan = links(args)
+    for destination, source in plan:
+        if link_state(destination, source) != "OK":
+            raise Unsafe(f"Hook missing/conflicting/broken: {destination}; run dgpy-setup for this Flame User")
+    duplicates = duplicate_hooks(args, plan)
+    if duplicates:
+        raise Unsafe("Duplicate hook candidates; launch stopped: " + ", ".join(map(str, duplicates)))
+    for probe in hook_dir(args).glob("dgpy*probe*.py"):
+        if not probe.is_symlink() or not probe.is_file():
+            raise Unsafe(f"Unmanaged/broken probe: {probe}")
+    config = args.config or os.environ.get("DGPY_CONFIG")
+    if args.with_internal and not config:
+        raise Unsafe("--with-internal requires --config or DGPY_CONFIG")
+    child_env = os.environ.copy()
+    # The FlameFamily vendor launcher can otherwise pick another product from
+    # inherited flavour settings or the first fla* executable in its bin dir.
+    child_env["START_APPLICATION_FLAVOUR"] = "flame"
+    if config:
+        try:
+            import tomllib
+        except ImportError:
+            raise Unsafe("Flame configuration validation requires Python 3.11+; set DGPY_PYTHON")
+        config = Path(config).expanduser().resolve()
+        with config.open("rb") as stream:
+            try:
+                tomllib.load(stream)
+            except tomllib.TOMLDecodeError as error:
+                raise Unsafe(f"Invalid TOML configuration: {error}")
+        child_env["DGPY_CONFIG"] = str(config)
+        # Validate the current checkout's schema without loading extensions/Qt.
+        validation = subprocess.run(
+            [sys.executable, "-I", "-c",
+             "import sys; sys.path.insert(0, sys.argv[1]); "
+             "from dg_python_scripts.config import load_config; load_config(sys.argv[2])",
+             str(paths[0]), str(config)], text=True, capture_output=True)
+        if validation.returncode:
+            raise Unsafe(f"DGpy configuration rejected: {validation.stderr.strip()}")
+    else:
+        child_env.pop("DGPY_CONFIG", None)
+    inherited = child_env.get("PYTHONPATH", "")
+    child_env["PYTHONPATH"] = os.pathsep.join(map(str, paths)) + (os.pathsep + inherited if inherited else "")
+    print(f"Python: {sys.executable} ({platform.python_version()})")
+    print(f"Flame: {executable}\nHook: {hook_dir(args)}")
+    print(f"PYTHONPATH: {child_env['PYTHONPATH']}\nDGPY_CONFIG: {child_env.get('DGPY_CONFIG', '(unset)')}")
+    print("Uses the currently loaded Flame User; existing hooks and user loading are unchanged.")
+    if args.dry_run:
+        print("Preview only; Flame was not started.")
+        return
+    # exec preserves signals/exit status and passes variables only to this session.
+    sys.stdout.flush()
+    os.execve(str(executable), [str(executable)], child_env)
+
+
 def install(args):
     directory = args.bin_dir.expanduser().absolute()
     source = Path(__file__).resolve()
-    destination = directory / "dgpy"
-    names = ("dgpy-update", "dgpy-status", "dgpy-switch", "dgpy-setup")
-    if os.path.lexists(destination) and (destination.is_symlink() or not destination.is_file() or destination.read_bytes() != source.read_bytes()):
-        raise Unsafe(f"Existing tool protected: {destination}; install into a fresh directory")
+    files = [(directory / "dgpy", source.with_name("dgpy").read_bytes()),
+             (directory / "dgpy_dev.py", source.read_bytes())]
+    names = ("dgpy-update", "dgpy-status", "dgpy-switch", "dgpy-setup", "dgpy-flame")
+    for destination, content in files:
+        if os.path.lexists(destination) and (destination.is_symlink() or not destination.is_file() or destination.read_bytes() != content):
+            raise Unsafe(f"Existing tool protected: {destination}; install into a fresh directory")
     for name in names:
         path = directory / name
         if os.path.lexists(path) and not (path.is_symlink() and path.readlink() == Path("dgpy")):
@@ -273,10 +364,11 @@ def install(args):
     print(f"Install stable tool copy and command links in {directory}")
     if args.apply:
         directory.mkdir(parents=True, exist_ok=True)
-        if not os.path.lexists(destination):
-            with destination.open("xb") as stream:
-                stream.write(source.read_bytes())
-            destination.chmod(0o755)
+        for destination, content in files:
+            if not os.path.lexists(destination):
+                with destination.open("xb") as stream:
+                    stream.write(content)
+                destination.chmod(0o755)
         for name in names:
             path = directory / name
             if not os.path.lexists(path):
@@ -288,23 +380,26 @@ def install(args):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     subs = parser.add_subparsers(dest="command", required=True)
-    for name in ("status", "update", "switch", "setup", "env", "install"):
+    for name in ("status", "update", "switch", "setup", "env", "install", "flame"):
         sub = subs.add_parser(name)
         sub.add_argument("--root", type=Path, default=Path(os.environ.get("DGPY_ROOT", "~/DGpy")))
         if name in ("status", "update", "switch"):
             sub.add_argument("--repo", choices=("public", "internal", "all"), default="all", required=name == "switch")
         if name == "switch":
             sub.add_argument("branch")
-        if name in ("status", "setup"):
+        if name in ("status", "setup", "flame"):
             sub.add_argument("--hook-dir", type=Path)
             sub.add_argument("--check-hook-dir", type=Path, action="append", default=[],
                              help="additional hook search root to scan for duplicates (repeatable)")
             sub.add_argument("--probe", action="append", default=[])
         if name in ("setup", "install"):
             sub.add_argument("--apply", action="store_true")
-        if name == "env":
+        if name in ("env", "flame"):
             sub.add_argument("--with-internal", action="store_true")
             sub.add_argument("--config", type=Path)
+        if name == "flame":
+            sub.add_argument("--flame-executable", type=Path)
+            sub.add_argument("--dry-run", action="store_true", help="validate and print the launch plan without starting Flame")
         if name == "install":
             sub.add_argument("--bin-dir", type=Path, default=Path("~/DGpy/bin"))
     if argv is None:
@@ -329,7 +424,7 @@ def main(argv=None):
                     raise Unsafe("Another DGpy update/switch is running for this root")
                 synchronize(args)
         else:
-            return {"status": status, "setup": setup, "env": environment, "install": install}[args.command](args) or 0
+            return {"status": status, "setup": setup, "env": environment, "install": install, "flame": launch_flame}[args.command](args) or 0
         return 0
     except (Unsafe, OSError) as error:
         print(f"STOP: {error}", file=sys.stderr)

@@ -1,0 +1,27 @@
+#!/bin/sh
+# Stable entry point: do not parse the modern helper with an old OS Python.
+set -eu
+tool_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+if [ -n "${DGPY_PYTHON:-}" ]; then
+    runtime=$DGPY_PYTHON
+    case "$runtime" in /*) ;; *) echo 'STOP: DGPY_PYTHON must be an absolute executable path' >&2; exit 1 ;; esac
+elif [ -x /opt/Autodesk/python/2025.2.7/bin/python3 ]; then
+    runtime=/opt/Autodesk/python/2025.2.7/bin/python3
+else
+    runtime=$(command -v python3 || true)
+fi
+if [ -z "$runtime" ] || [ ! -x "$runtime" ]; then
+    echo 'STOP: No Python runtime; set DGPY_PYTHON to the Flame Python executable' >&2
+    exit 1
+fi
+if ! "$runtime" -I -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)'; then
+    echo 'STOP: Python 3.9+ required; set DGPY_PYTHON to /opt/Autodesk/python/2025.2.7/bin/python3' >&2
+    exit 1
+fi
+command_name=${0##*/}
+case "$command_name" in
+    dgpy-setup)
+        case "${1:-}" in env|install) ;; *) set -- setup "$@" ;; esac ;;
+    dgpy-*) set -- "${command_name#dgpy-}" "$@" ;;
+esac
+exec "$runtime" -I "$tool_dir/dgpy_dev.py" "$@"

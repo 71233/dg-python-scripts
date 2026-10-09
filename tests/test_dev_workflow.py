@@ -6,6 +6,7 @@ import io
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -24,7 +25,7 @@ def run(*args, cwd=None):
 
 class DevWorkflowTests(unittest.TestCase):
     def setUp(self):
-        hook_environment = mock.patch.dict(os.environ, {"DL_PYTHON_HOOK_PATH": ""})
+        hook_environment = mock.patch.dict(os.environ, {"DL_PYTHON_HOOK_PATH": "", "DGPY_CONFIG": "", "DGPY_FLAME_EXECUTABLE": ""})
         hook_environment.start()
         self.addCleanup(hook_environment.stop)
         self.temp = tempfile.TemporaryDirectory(prefix="DGpy test ")
@@ -315,6 +316,191 @@ class DevWorkflowTests(unittest.TestCase):
         (directory / "dgpy").write_text("existing tool")
         self.assertEqual(self.cli("install", "--bin-dir", str(directory), "--apply"), 1)
         self.assertEqual((directory / "dgpy").read_text(), "existing tool")
+
+    def launcher(self, version="2025.2.7"):
+        product = self.root / "flame_2025.2.7"
+        (product / "bin").mkdir(parents=True, exist_ok=True)
+        (product / "VERSION").write_text('#define VERSION "' + version + '"\n')
+        executable = product / "bin/startApplication"
+        executable.write_text("#!/bin/sh\nexit 0\n")
+        executable.chmod(0o755)
+        self.assertEqual(self.cli("setup", "--hook-dir", str(self.hooks), "--apply"), 0)
+        return executable
+
+    def flame_cli(self, executable, *options):
+        return self.cli("flame", "--flame-executable", str(executable),
+                        "--hook-dir", str(self.hooks), *options)
+
+    def test_flame_preview_never_executes_or_changes_environment(self):
+        executable = self.launcher()
+        before = dict(os.environ)
+        with mock.patch.object(DEV.os, "execve") as execute:
+            self.assertEqual(self.flame_cli(executable, "--dry-run"), 0)
+            execute.assert_not_called()
+        self.assertEqual(dict(os.environ), before)
+
+    def test_flame_exec_child_environment_and_loaded_user_preserved(self):
+        executable = self.launcher()
+        with mock.patch.dict(os.environ, {"PYTHONPATH": "existing packages", "HOME": str(self.root),
+                                         "DL_PYTHON_HOOK_PATH": "", "DGPY_CONFIG": ""}):
+            before = dict(os.environ)
+            with mock.patch.object(DEV.os, "execve") as execute:
+                self.assertEqual(self.flame_cli(executable), 0)
+            command, argv, child = execute.call_args.args
+            self.assertEqual(command, str(executable))
+            self.assertEqual(argv, [str(executable)])
+            self.assertEqual(child["PYTHONPATH"], str(self.public / "src") + ":existing packages")
+            self.assertNotIn("DGPY_CONFIG", child)
+            for key in ("HOME", "DL_PYTHON_HOOK_PATH"):
+                self.assertEqual(child[key], before[key])
+            self.assertEqual(dict(os.environ), before)
+
+    def test_flame_wrong_version_missing_hook_or_duplicate_stops_before_exec(self):
+        executable = self.launcher("2026.2.3")
+        with mock.patch.object(DEV.os, "execve") as execute:
+            self.assertEqual(self.flame_cli(executable), 1)
+            executable = self.launcher()
+            (self.hooks / "dgpy_bootstrap.py").unlink()
+            self.assertEqual(self.flame_cli(executable), 1)
+            self.launcher()
+            (self.hooks / "alias.py").symlink_to(self.public / "bootstrap/dgpy_bootstrap.py")
+            self.assertEqual(self.flame_cli(executable), 1)
+            execute.assert_not_called()
+
+    def test_flame_unrelated_legacy_hook_is_preserved(self):
+        executable = self.launcher()
+        legacy = self.hooks / "legacy.py"
+        legacy.write_text("# unrelated existing hook")
+        self.assertEqual(self.flame_cli(executable, "--dry-run"), 0)
+        self.assertEqual(legacy.read_text(), "# unrelated existing hook")
+
+    def test_flame_internal_requires_config_and_rejects_bad_toml(self):
+        executable = self.launcher()
+        with mock.patch.dict(os.environ, {"DGPY_CONFIG": ""}), mock.patch.object(DEV.os, "execve") as execute:
+            self.assertEqual(self.flame_cli(executable, "--with-internal"), 1)
+            config = self.root / "broken.toml"
+            config.write_text("[broken")
+            self.assertEqual(self.flame_cli(executable, "--config", str(config)), 1)
+            execute.assert_not_called()
+
+    def test_flame_vendor_defaults_and_explicit_path(self):
+        executable = self.launcher()
+        args = mock.Mock(flame_executable=executable)
+        self.assertEqual(DEV.flame_executable(args), executable)
+        for system, expected in (("Darwin", "/opt/Autodesk/flame_2025.2.7/bin/startApplication"),
+                                  ("Linux", "/opt/Autodesk/.flamefamily_2025.2.7/bin/startApplication")):
+            args.flame_executable = None
+            with mock.patch.dict(os.environ, {"DGPY_FLAME_EXECUTABLE": ""}), \
+                    mock.patch.object(DEV.platform, "system", return_value=system), \
+                    mock.patch.object(DEV.Path, "is_file", return_value=True), \
+                    mock.patch.object(DEV.os, "access", return_value=True), \
+                    mock.patch.object(DEV.Path, "read_text", return_value='#define VERSION "2025.2.7"\n'):
+                self.assertEqual(str(DEV.flame_executable(args)), expected)
+
+    @unittest.skipIf(sys.version_info < (3, 11), "TOML requires Python 3.11")
+    def test_flame_inherited_config_validates_schema_and_passes_internal_paths(self):
+        executable = self.launcher()
+        # Use the real config schema without introducing a dependency on Core.
+        package = self.public / "src/dg_python_scripts"
+        package.mkdir()
+        (package / "__init__.py").write_text("")
+        (package / "config.py").write_bytes((Path(__file__).parents[1] / "src/dg_python_scripts/config/loader.py").read_bytes())
+        config = self.root / "site config.toml"
+        config.write_text('[extensions]\nmodules = ["example_extension"]\n')
+        with mock.patch.dict(os.environ, {"DGPY_CONFIG": str(config)}), mock.patch.object(DEV.os, "execve") as execute:
+            self.assertEqual(self.flame_cli(executable, "--with-internal"), 0, self.output.getvalue())
+            child = execute.call_args.args[2]
+            self.assertEqual(child["DGPY_CONFIG"], str(config))
+            self.assertTrue(child["PYTHONPATH"].startswith(str(self.public / "src") + ":" + str(self.internal / "src")))
+            self.assertEqual(child["START_APPLICATION_FLAVOUR"], "flame")
+            execute.reset_mock()
+            config.write_text("unknown_key = true\n")
+            self.assertEqual(self.flame_cli(executable), 1)
+            execute.assert_not_called()
+
+
+class ShellRuntimeTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="DGpy runtime ")
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.bin = self.root / "stable bin"
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(DEV.main(["install", "--bin-dir", str(self.bin), "--apply"]), 0)
+        self.env = dict(os.environ, DGPY_PYTHON=sys.executable)
+
+    def call(self, command, *args, env=None):
+        return subprocess.run([str(self.bin / command), *args], env=env or self.env,
+                              text=True, capture_output=True)
+
+    def test_all_commands_use_selected_runtime_with_spaces_and_ignore_pythonpath(self):
+        poison = self.root / "poison"
+        poison.mkdir()
+        (poison / "argparse.py").write_text("raise RuntimeError('inherited Python path used')")
+        runtime = self.root / "chosen Python"
+        runtime.symlink_to(sys.executable)
+        env = dict(self.env, DGPY_PYTHON=str(runtime), PYTHONPATH=str(poison))
+        for command in ("dgpy-status", "dgpy-update", "dgpy-switch", "dgpy-setup", "dgpy-flame"):
+            result = self.call(command, "--help", env=env)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("usage:", result.stdout)
+
+    def test_invalid_override_fails_closed(self):
+        for value in ("relative/python", str(self.root / "missing")):
+            result = self.call("dgpy-status", "--help", env=dict(self.env, DGPY_PYTHON=value))
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("STOP:", result.stderr)
+            self.assertNotIn("SyntaxError", result.stderr)
+
+    def test_old_python_is_rejected_before_helper_parse(self):
+        old = self.root / "old Python"
+        old.write_text("#!/bin/sh\nexit 1\n")
+        old.chmod(0o755)
+        result = self.call("dgpy-status", "--help", env=dict(self.env, DGPY_PYTHON=str(old)))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Python 3.9+ required", result.stderr)
+
+    def test_bundled_python_precedes_os_python(self):
+        bundled = Path("/opt/Autodesk/python/2025.2.7/bin/python3")
+        if not bundled.is_file():
+            self.skipTest("Bundled Flame Python unavailable; verified on host/container")
+        old_bin = self.root / "old bin"
+        old_bin.mkdir()
+        old = old_bin / "python3"
+        old.write_text("#!/bin/sh\necho 'OS Python unexpectedly selected' >&2\nexit 36\n")
+        old.chmod(0o755)
+        env = dict(self.env, PATH=str(old_bin) + os.pathsep + self.env["PATH"])
+        env.pop("DGPY_PYTHON", None)
+        result = self.call("dgpy-status", "--help", env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_install_is_independent_of_checkout_tools(self):
+        for command in ("dgpy-status", "dgpy-update", "dgpy-switch", "dgpy-setup", "dgpy-flame"):
+            self.assertEqual(self.call(command, "--help").returncode, 0)
+        self.assertFalse((self.root / "dg-python-scripts/tools").exists())
+
+    def test_installed_setup_and_status_run_with_selected_interpreter(self):
+        repo = self.root / "dg-python-scripts"
+        repo.mkdir()
+        run("git", "init", "-b", "main", str(repo))
+        run("git", "config", "user.email", "test@example.invalid", cwd=repo)
+        run("git", "config", "user.name", "Test", cwd=repo)
+        (repo / "bootstrap").mkdir()
+        (repo / "bootstrap/dgpy_bootstrap.py").write_text("# test hook\n")
+        run("git", "add", ".", cwd=repo)
+        run("git", "commit", "-m", "fixture", cwd=repo)
+        env = dict(self.env, DGPY_ROOT=str(self.root), DL_PYTHON_HOOK_PATH="")
+        if Path("/opt/Autodesk/python/2025.2.7/bin/python3").is_file():
+            env.pop("DGPY_PYTHON", None)
+        hooks = self.root / "hooks"
+        result = self.call("dgpy-setup", "--hook-dir", str(hooks), "--apply", env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        result = self.call("dgpy-status", "--repo", "public", "--hook-dir", str(hooks), env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Python:", result.stdout)
+        self.assertNotIn("(3.6.", result.stdout)
+        self.assertIn("tree: clean", result.stdout)
+        print(result.stdout.splitlines()[0])
 
 
 if __name__ == "__main__":
