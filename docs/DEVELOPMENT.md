@@ -31,7 +31,7 @@ branch: `chore/dev-workflow`、[PR #4](https://github.com/71233/dg-python-script
 Macはローカルテストで確認。今回、GitHub認証にworkflow scopeが無いためCI設定のMac matrix追加は含めない。
 
 - ローカルMacのPython 3.9.6: helperのGit/symlink安全性テスト21件成功。
-- ローカルMacのPython 3.12.14: Public suite 67件、Internal統合3件成功。両wheel build成功。
+- ローカルMacのPython 3.12.14: Public suite 67件、Internal統合4件成功。両wheel build成功。
 - CIのPython 3.11: PR checksを確認すること。
 - Flame 2025.2.7 Mac/Linux実機検証: **未実施**。DEV_WORKFLOWの手順を実施して結果を追加する。
 - ChatGPT Project設定: PROJECT_INSTRUCTIONSの本文を設定へ反映する必要がある。
@@ -42,3 +42,6 @@ Macはローカルテストで確認。今回、GitHub認証にworkflow scopeが
 このファイルに作業branch、PRリンク、最終検証、未解決点、次の具体的操作を更新する。
 機能ごとの仕様・実測結果はFLAME_NOTES、非公開の詳細はInternalへ保存する。
 GitHubで新しい変更が入ったら上記snapshotを現在値として扱わない。
+
+Public PR #4のLinux/Python 3.11 CI成功を確認。Internal CIには既存の空Media Panel判定の
+不整合があり、修正パッチと権限上の制約はInternalのDEVELOPMENTに記録した。
