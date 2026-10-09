@@ -99,17 +99,32 @@ def synchronize(args):
         if any(a and b and (a == b or a.startswith(b + "/") or b.startswith(a + "/"))
                for a in ignored for b in tracked):
             raise Unsafe(f"{repo}: ignored files overlap target branch; move them first")
-        plans.append((key, repo, branch, target, exists, git(repo, "rev-parse", "HEAD")))
-    for key, repo, branch, target, exists, head in plans:
+        plans.append((key, repo, branch, target, exists, git(repo, "rev-parse", "HEAD"),
+                      git(repo, "symbolic-ref", "HEAD"), git(repo, "rev-parse", target),
+                      git(repo, "rev-parse", local) if exists else None))
+    # Check every checkout again before mutating the first one. Pin fetched
+    # commits so an external fetch cannot silently change the update target.
+    for key, repo, branch, target, exists, head, current, commit, local_head in plans:
         clean(repo)
-        if git(repo, "rev-parse", "HEAD") != head:
-            raise Unsafe(f"{repo}: HEAD changed during preflight")
+        local = "refs/heads/" + branch
+        if (git(repo, "rev-parse", "HEAD") != head
+                or git(repo, "symbolic-ref", "HEAD") != current
+                or ref_exists(repo, local) != exists
+                or (exists and git(repo, "rev-parse", local) != local_head)
+                or git(repo, "rev-parse", target) != commit
+                or (exists and tracking(repo, branch) != target)):
+            raise Unsafe(f"{repo}: branch/ref changed during preflight")
+    for key, repo, branch, target, exists, head, current, commit, local_head in plans:
+        clean(repo)
+        if git(repo, "rev-parse", "HEAD") != head or git(repo, "symbolic-ref", "HEAD") != current:
+            raise Unsafe(f"{repo}: HEAD/branch changed before update")
         if args.command == "switch":
             if exists:
                 git(repo, "checkout", "--no-overwrite-ignore", branch)
             else:
-                git(repo, "checkout", "--no-overwrite-ignore", "-b", branch, "--track", target)
-        git(repo, "merge", "--ff-only", target)
+                git(repo, "checkout", "--no-overwrite-ignore", "-b", branch, commit)
+                git(repo, "branch", "--set-upstream-to=" + target, branch)
+        git(repo, "merge", "--ff-only", commit)
         print(f"Updated {key}: {repo}\n  branch: {branch}\n  commit: {git(repo, 'rev-parse', 'HEAD')}\n  tree: {'dirty' if git(repo, 'status', '--porcelain', '--untracked-files=all') else 'clean'}")
     print("Restart Flame to reliably reload package code. Multiple repos are not an atomic transaction.")
 
@@ -145,6 +160,31 @@ def links(args):
     return [(hook_dir(args) / source.name, source) for source in sources]
 
 
+def duplicate_hooks(args, plan):
+    """Conservative scan of explicitly known hook roots; never modifies hooks."""
+    roots = [hook_dir(args), *args.check_hook_dir]
+    roots.extend(Path(value).expanduser() for value in
+                 os.environ.get("DL_PYTHON_HOOK_PATH", "").split(os.pathsep) if value)
+    destinations = {source.resolve() for _, source in plan}
+    intended = {destination.absolute() for destination, _ in plan}
+    names = {source.name for _, source in plan}
+    found = set()
+    for root in roots:
+        root = root.expanduser().absolute()
+        if not root.exists():
+            continue
+        if not root.is_dir():
+            raise Unsafe(f"Hook search root is not a directory: {root}")
+        for path in root.rglob("*.py"):
+            # Exact destinations are expected. Alternate root aliases for them
+            # are conservative conflicts because Flame may search both roots.
+            if path.absolute() in intended:
+                continue
+            if path.name in names or (path.is_symlink() and path.resolve() in destinations):
+                found.add(path)
+    return sorted(found)
+
+
 def status(args):
     failed = False
     for key, repo in repositories(args):
@@ -160,6 +200,9 @@ def status(args):
         state = link_state(destination, source)
         print(f"hook: {state}: {destination} -> {source}")
         failed |= state != "OK"
+    for path in duplicate_hooks(args, links(args)):
+        print(f"hook: DUPLICATE CANDIDATE: {path}")
+        failed = True
     # Existing probe links are shown even when no --probe was supplied.
     for path in sorted(hook_dir(args).glob("dgpy*probe*.py")):
         valid = path.is_symlink() and path.exists()
@@ -170,6 +213,9 @@ def status(args):
 
 def setup(args):
     plan = links(args)
+    duplicates = duplicate_hooks(args, plan)
+    if duplicates:
+        raise Unsafe("Duplicate hook candidates; inspect before setup: " + ", ".join(map(str, duplicates)))
     for destination, source in plan:
         if not source.is_file():
             raise Unsafe(f"Missing hook source: {source}; switch to the intended branch first")
@@ -251,6 +297,8 @@ def main(argv=None):
             sub.add_argument("branch")
         if name in ("status", "setup"):
             sub.add_argument("--hook-dir", type=Path)
+            sub.add_argument("--check-hook-dir", type=Path, action="append", default=[],
+                             help="additional hook search root to scan for duplicates (repeatable)")
             sub.add_argument("--probe", action="append", default=[])
         if name in ("setup", "install"):
             sub.add_argument("--apply", action="store_true")

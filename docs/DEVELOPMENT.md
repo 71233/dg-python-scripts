@@ -27,15 +27,14 @@ Internal repoの開発状態・Probe一覧・非公開結果はInternalの `docs
 branch: `chore/dev-workflow`、[PR #4](https://github.com/71233/dg-python-scripts/pull/4) (draft)。既存Status HUDとは独立した変更。
 `tools/dgpy_dev.py`は更新・状態・branch切替・symlink配置・環境表示・安定したtool installを提供。
 既存配置保護とGit操作の安全条件はDEV_WORKFLOWに記載。
-既存CIはLinux上でPython 3.11のsuiteとwheelを検証する。
-Macはローカルテストで確認。今回、GitHub認証にworkflow scopeが無いためCI設定のMac matrix追加は含めない。
+初回のCIはLinux上でPython 3.11のsuiteとwheelを検証した。
+継続作業の変更・CI状態は下の再監査記録を参照する。
 
 - ローカルMacのPython 3.9.6: helperのGit/symlink安全性テスト21件成功。
 - ローカルMacのPython 3.12.14: Public suite 67件、Internal統合4件成功。両wheel build成功。
 - CIのPython 3.11: PR checksを確認すること。
 - Flame 2025.2.7 Mac/Linux実機検証: **未実施**。DEV_WORKFLOWの手順を実施して結果を追加する。
-- ChatGPT Project設定: PROJECT_INSTRUCTIONSの本文を設定へ反映する必要がある。
-  リポジトリ文書・AGENTS.mdの追加だけではChatGPTのProject設定は更新されない。
+- ChatGPT Project設定: ユーザーから設置完了の報告あり。以前の「貼付が必要」は古い記録。
 
 ## 作業を終えるとき
 
@@ -45,3 +44,22 @@ GitHubで新しい変更が入ったら上記snapshotを現在値として扱わ
 
 Public PR #4のLinux/Python 3.11 CI成功を確認。Internal CIには既存の空Media Panel判定の
 不整合があり、修正パッチと権限上の制約はInternalのDEVELOPMENTに記録した。
+
+## 2026-10-09 継続作業の再監査
+
+GitHubのbranch/全PR一覧とローカルコードを再取得して確認した。
+開始時Public `chore/dev-workflow` / `7263696cfd53fe012e7a1ec18bb86d9317add9da`、
+tree clean、GitHubのPR #4 headと一致。mainは上記snapshotと同じ。
+PR #4と既存branchを再利用し、Status HUD PR #3は変更していない。
+
+- 更新／切替計画の後に全repoを再確認。HEADだけでなくbranch、local/origin参照、trackingも確認。
+  適用先を完全commitへ固定した。
+- setup/statusに追加hook検索先と環境変数からの重複候補検出を追加。既存hookは変更しない。
+- ローカルmacOS 26.7.1: Python 3.9.6 helper安全性29件、Python 3.12.15 Public全75件成功。
+  bare repo/仮hook先のみ使用。Mac/Linux既定pathはmockで確認し、Linux実行結果とは区別する。
+- CIにLinux/macOS matrixを追加。新しいheadでの実行結果はPR checksと検証記録を確認する。
+- 検証の対象・制約・次の操作は [検証記録](validation/2026-10-09-dev-workflow.md)。
+
+Flame 2025.2.7は両OSとも実機未検証。PRはdraftを維持し、mergeは行わない。
+次はDEV_WORKFLOWのFlame実機手順をMac/Linuxで実施し、二重登録・module path・
+再起動後のbranch切替反映の結果を記録する。

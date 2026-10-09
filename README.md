@@ -68,6 +68,8 @@ Flame Hook領域への配置は自動で行いません。
 
 Mac/Linux共通の `dgpy-update`、`dgpy-status`、`dgpy-switch`、`dgpy-setup` を追加しました。
 既存配置と作業中の変更を保護し、必要なbootstrap／Probeだけをsymlinkします。
+setup/statusは指定hook先・`DL_PYTHON_HOOK_PATH`・追加の `--check-hook-dir` にある
+重複候補も確認します。共有／project／version別hook先は明示して検査してください。
 初回tool install、起動環境、日常操作、Probeの有効化と実機検証は
 [DEV_WORKFLOW](docs/DEV_WORKFLOW.md)を参照してください。
 
@@ -159,7 +161,7 @@ ExtensionはDGpy process registryの初回生成時に1回だけ読み込まれ�
 
 ## CI
 
-GitHub ActionsはPython 3.11でPublic Core単独のunit testとwheel buildを実行します。
+GitHub ActionsはLinux/macOSのPython 3.11でPublic Core単独のunit testとwheel buildを実行します。
 Public sourceが`dg_python_scripts_internal`を参照しないこともテストし、
 public → internal の逆依存をCIで防ぎます。Internal repoへのアクセスは行いません。
 

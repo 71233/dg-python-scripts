@@ -42,7 +42,19 @@ dgpy-status
 既存配置を移行する場合は、元ファイルを**全hook検索先の外**へ退避してから再実行する。
 退避先、元パス、内容のchecksumを作業記録に残す。hook先に `.py` のバックアップを置かない。
 共用・project・version別hook先、`DL_PYTHON_HOOK_PATH`にも同じbootstrapがないか確認する。
-コマンドは指定した配置だけを確認し、他のhook検索先やFlameプロセスを自動検出しない。
+setup/statusは指定hook先、その配下、`DL_PYTHON_HOOK_PATH`、繰り返し指定できる
+`--check-hook-dir` を保守的に検索する。同名bootstrap／明示Probe、別名でも同じsourceを
+指すsymlinkがあれば重複候補としてsetupを停止し、statusは終了コード1で報告する。
+既存hookの削除・移動は行わない。例:
+
+```sh
+dgpy-setup --check-hook-dir /path/to/shared/hooks --check-hook-dir /path/to/project/hooks
+dgpy-status --check-hook-dir /path/to/shared/hooks --check-hook-dir /path/to/project/hooks
+```
+
+検索対象外のFlame設定、別の名前の通常コピー、symlinkされた子ディレクトリ、
+Flameプロセスは自動検出しない。共有／project／version別検索先を明示して確認し、
+Flame内でメニューが一度だけ表示されることも確認する。
 
 ## Flame起動環境
 
@@ -92,6 +104,8 @@ Publicだけを取得した環境ではupdate/statusに `--repo public` を指�
 - localがahead／diverged、origin branchが不存在／削除済みなら停止する。
 - reset、stash、rebase、force checkout、force pushはしない。
 - 全対象を事前確認してからworking treeを変更する。fetchはremote参照を変更し得る。
+- 全repoの計画作成後、dirty状態・現在branch・HEAD・切替先local/origin参照・trackingを
+  再確認する。適用先は確認済みの完全commitに固定し、確認中のbranch/ref変更なら停止する。
 - 同じrootの補助コマンドによるupdate/switch同時実行をロックする。
 - **複数repoの更新はトランザクションではない**。途中のディスク障害や外部Git操作で
   一方だけ更新される場合はstatusで結果を確認する。自動rollbackで変更を消さない。
@@ -125,7 +139,7 @@ PYTHONPATH=src python3.11 -m unittest discover -s tests -v
 ```
 
 自動テストは一時bare repo・cloneと仮hook先で実施し、ユーザーのFlame配置を変更しない。
-Linux CIとMacの検証を区別して `docs/DEVELOPMENT.md` に結果を記録する。
+Linux/Mac CIとローカルMacの検証を区別して `docs/DEVELOPMENT.md` に結果を記録する。
 
 Flame 2025.2.7のMac/Linuxそれぞれで次を行う（この変更の実機検証は未実施）:
 

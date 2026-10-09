@@ -8,6 +8,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 SPEC = importlib.util.spec_from_file_location("dgpy_dev", Path(__file__).parents[1] / "tools/dgpy_dev.py")
 DEV = importlib.util.module_from_spec(SPEC)
@@ -23,6 +24,9 @@ def run(*args, cwd=None):
 
 class DevWorkflowTests(unittest.TestCase):
     def setUp(self):
+        hook_environment = mock.patch.dict(os.environ, {"DL_PYTHON_HOOK_PATH": ""})
+        hook_environment.start()
+        self.addCleanup(hook_environment.stop)
         self.temp = tempfile.TemporaryDirectory(prefix="DGpy test ")
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name).resolve()
@@ -93,6 +97,53 @@ class DevWorkflowTests(unittest.TestCase):
         self.assertEqual(self.cli("update"), 1)
         self.assertEqual(self.head(self.public), original)
         self.assertFalse((self.public / "new.py").exists())
+
+    def test_same_commit_branch_change_during_preflight_is_refused(self):
+        original = self.head(self.public)
+        self.remote_change(self.public)
+        real_git = DEV.git
+
+        def external_switch(repo, *args, **kwargs):
+            result = real_git(repo, *args, **kwargs)
+            if repo == self.internal and args[:1] == ("fetch",):
+                run("git", "checkout", "-b", "external", cwd=self.public)
+            return result
+
+        with mock.patch.object(DEV, "git", side_effect=external_switch):
+            self.assertEqual(self.cli("update"), 1)
+        self.assertEqual(self.head(self.public), original)
+        self.assertEqual(run("git", "branch", "--show-current", cwd=self.public), "external")
+
+    def test_ref_change_during_preflight_is_refused(self):
+        original = self.head(self.public)
+        self.remote_change(self.public)
+        real_git = DEV.git
+
+        def external_fetch(repo, *args, **kwargs):
+            result = real_git(repo, *args, **kwargs)
+            if repo == self.internal and args[:1] == ("fetch",):
+                run("git", "update-ref", "refs/remotes/origin/main", original, cwd=self.public)
+            return result
+
+        with mock.patch.object(DEV, "git", side_effect=external_fetch):
+            self.assertEqual(self.cli("update"), 1)
+        self.assertEqual(self.head(self.public), original)
+
+    def test_second_repo_dirtied_after_plan_blocks_first_update(self):
+        original = self.head(self.public)
+        self.remote_change(self.public)
+        real_git = DEV.git
+
+        def external_edit(repo, *args, **kwargs):
+            result = real_git(repo, *args, **kwargs)
+            if repo == self.internal and args == ("rev-parse", "HEAD"):
+                (self.internal / "untracked").write_text("keep")
+            return result
+
+        with mock.patch.object(DEV, "git", side_effect=external_edit):
+            self.assertEqual(self.cli("update"), 1)
+        self.assertEqual(self.head(self.public), original)
+        self.assertEqual((self.internal / "untracked").read_text(), "keep")
 
     def test_tracked_change_is_preserved(self):
         path = self.public / "src/module.py"
@@ -192,6 +243,50 @@ class DevWorkflowTests(unittest.TestCase):
         (self.hooks / probe.name).write_text("keep")
         self.assertEqual(self.cli("setup", "--hook-dir", str(self.hooks), "--probe", str(probe), "--apply"), 1)
         self.assertFalse((self.hooks / "dgpy_bootstrap.py").exists())
+
+    def test_duplicate_copy_in_additional_root_blocks_setup(self):
+        other = self.root / "project hooks"
+        other.mkdir()
+        copy = other / "dgpy_bootstrap.py"
+        copy.write_text("existing hook")
+        options = ("--hook-dir", str(self.hooks), "--check-hook-dir", str(other))
+        self.assertEqual(self.cli("setup", *options, "--apply"), 1)
+        self.assertFalse(self.hooks.exists())
+        self.assertEqual(copy.read_text(), "existing hook")
+        self.assertEqual(self.cli("status", *options), 1)
+        self.assertIn("DUPLICATE CANDIDATE", self.output.getvalue())
+
+    def test_duplicate_link_with_other_name_blocks_setup(self):
+        self.hooks.mkdir()
+        alias = self.hooks / "old_bootstrap.py"
+        alias.symlink_to(self.public / "bootstrap/dgpy_bootstrap.py")
+        self.assertEqual(self.cli("setup", "--hook-dir", str(self.hooks), "--apply"), 1)
+        self.assertTrue(alias.is_symlink())
+        self.assertFalse((self.hooks / "dgpy_bootstrap.py").exists())
+
+    def test_environment_hook_root_and_nested_duplicate_are_scanned(self):
+        other = self.root / "shared hooks"
+        nested = other / "nested"
+        nested.mkdir(parents=True)
+        (nested / "dgpy_bootstrap.py").write_text("existing hook")
+        with mock.patch.dict(os.environ, {"DL_PYTHON_HOOK_PATH": str(other)}):
+            self.assertEqual(self.cli("setup", "--hook-dir", str(self.hooks), "--apply"), 1)
+        self.assertFalse(self.hooks.exists())
+
+    def test_unrelated_hook_does_not_block_setup(self):
+        self.hooks.mkdir()
+        path = self.hooks / "other_tool.py"
+        path.write_text("existing unrelated hook")
+        self.assertEqual(self.cli("setup", "--hook-dir", str(self.hooks), "--apply"), 0)
+        self.assertEqual(path.read_text(), "existing unrelated hook")
+
+    def test_default_hook_paths_for_mac_and_linux(self):
+        for system, suffix in (("Darwin", "Library/Preferences/Autodesk/flame/python"),
+                               ("Linux", "flame/python")):
+            with mock.patch.object(DEV.platform, "system", return_value=system):
+                with mock.patch.object(DEV.Path, "home", return_value=self.root):
+                    self.assertEqual(self.cli("setup", "--apply"), 0)
+                    self.assertTrue((self.root / suffix / "dgpy_bootstrap.py").is_symlink())
 
     def test_probe_explicit_only_and_missing_detected(self):
         self.assertEqual(self.cli("setup", "--hook-dir", str(self.hooks), "--probe", str(self.root / "elsewhere.py")), 1)

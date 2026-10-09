@@ -24,6 +24,9 @@
 symlinkで更新されるのはディスク上のファイル。import済みmoduleとregistryの更新を
 メニュー再読み込みだけで保証しない。クリーンな検証にはFlame再起動を使う。
 新しい補助コマンドのFlame 2025.2.7 Mac/Linux実機確認は未実施。
+2026-10-09の継続作業で、仮hook先を使った重複検出とGit競合の回帰テストを追加した。
+これはFlameのhook探索・menu登録の実測ではない。詳細は
+[開発環境検証記録](validation/2026-10-09-dev-workflow.md)。
 手順は [DEV_WORKFLOW.md](DEV_WORKFLOW.md)。
 
 ## 新しい記録の書式
