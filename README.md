@@ -64,38 +64,34 @@ PYTHONPATH="$PWD/src" python3.11 -m unittest discover -s tests -v
 wheelの構築は`python3.11 -m pip wheel --no-deps . -w dist`で行えます。
 Flame Hook領域への配置は自動で行いません。
 
-## Flameでの初回確認
+## 開発環境の更新とFlame配置
 
-開発時は、Flame起動前の環境に以下を追加します。
-`/absolute/path/dg-python-scripts`を実際のcheckoutの絶対パスへ置き換えてください。
+Mac/Linux共通の `dgpy-update`、`dgpy-status`、`dgpy-switch`、`dgpy-setup` を追加しました。
+既存配置と作業中の変更を保護し、必要なbootstrap／Probeだけをsymlinkします。
+初回tool install、起動環境、日常操作、Probeの有効化と実機検証は
+[DEV_WORKFLOW](docs/DEV_WORKFLOW.md)を参照してください。
 
 ```sh
-export PYTHONPATH="/absolute/path/dg-python-scripts/src${PYTHONPATH:+:$PYTHONPATH}"
+python3 tools/dgpy_dev.py install --apply
+export PATH="$HOME/DGpy/bin:$PATH"
+dgpy-setup                   # まずプレビュー
+dgpy-setup --apply
+eval "$(dgpy-setup env)"     # 同じシェルからFlameを起動
+dgpy-status
 ```
 
-その後、`bootstrap/dgpy_bootstrap.py` **だけ**を既存のFlame Hook検索先へコピーします。
-ユーザー用の代表例はLinuxの`~/flame/python`、macOSの
-`~/Library/Preferences/Autodesk/flame/python`です。必要に応じてディレクトリを作成します。
-開発用の代替として`DL_PYTHON_HOOK_PATH`にcheckoutの`bootstrap`ディレクトリを追加できます。
-コピーと検索パス追加を同時に使って、同じbootstrapを二重に読み込まないでください。
-checkout全体や`src`をHook検索先へ置かないでください。
+既定checkoutは `~/DGpy/dg-python-scripts` と `~/DGpy/dg-python-scripts-internal`。
+異なる親ディレクトリは `DGPY_ROOT` または `--root` を指定します。
+コード更新後はFlameを再起動して確認します。新しいsetupの実機検証は未実施です。
 
-通常のシェル環境ではなく、実際にFlameを起動するプロセスへ環境変数が渡る必要があります。
-本番ではFlame用Python環境へのpackage配置または管理された`PYTHONPATH`を使用します。
-この初期構成にはinstaller／updaterは含めません。
+## 作業再開と仕様の保存先
 
-Flame再起動後、Main Menuの`DGpy → About / Diagnostics`を開きます。
-DGpy version、Flame version、Python version、runtime分類が表示されます。
-`primary`は検出されたversionが2025.2.7であるという意味で、実機検証済みの証明ではありません。
-それ以外のFlameは`unvalidated`、Flame外は`outside-flame`になります。
-診断Actionは互換性確認用に他versionでも表示します。将来の処理Actionは個別に対応範囲を定めます。
+- [Project Instructions](docs/PROJECT_INSTRUCTIONS.md): 恒久ルール。ChatGPT設定への貼付用。
+- [Development](docs/DEVELOPMENT.md): 現在のbranch/PR、検証状況、次の操作。
+- [Flame Notes](docs/FLAME_NOTES.md): 現在のAPI契約、証拠、未確認事項。
+- Internalの同名docs: 非公開Probeの進捗と実測ログ。
 
-### 実機チェック（未実施）
-
-1. Flame 2025.2.7でDGpy menuが一度だけ表示される。
-2. About / Diagnosticsが開き、versionと`primary`表示を確認できる。
-3. Closeで閉じ、再度開ける。既存のFlame操作に影響しない。
-4. packageパスを外した場合、DGpy menuだけが表示されずログに原因が残る。
+作業開始時にGitHubの現在値を確認し、文書に書かれたsnapshotを現在値と取り違えないでください。
 
 ## 設定
 
