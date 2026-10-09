@@ -4,6 +4,34 @@
 を確認する。恒久ルールは [PROJECT_INSTRUCTIONS.md](PROJECT_INSTRUCTIONS.md)。
 配置・検証手順は [DEV_WORKFLOW.md](DEV_WORKFLOW.md)。
 
+## 2026-10-09 Python入口・専用launcherの継続作業
+
+Public [PR #4](https://github.com/71233/dg-python-scripts/pull/4)、Internal
+[PR #1](https://github.com/71233/dg-python-scripts-internal/pull/1) を再利用。両PRはdraft／未merge。
+開始時は両repoの `chore/dev-workflow` がcleanでGitHub headと一致:
+Public `2038cce7ec0845a0c25b0b0ff459ba604e446eda`、
+Internal `72611184cc52500c60655a79f8a2cae757bec33f`。
+main、他branch、既存PR metadata、両repoの実コードと仕様文書を再確認した。
+
+ユーザーは従来のPublicメニュー、About/Diagnostics、Rename/Delete Markersメニューを
+Flame 2025.2.7のMac/Linuxで確認済みと報告。以下の古い「実機未検証」はその報告前の履歴。
+データ書込み／削除、新launcher、直接command、Linux Internal/Probe、branch切替の
+実機動作までは確認済みとしない。詳細な両repo commit/treeを伴う実機ログは未提供。
+
+今回の変更: shell入口でFlame 2025.2.7付属Pythonを優先し、helper読込み前にversionを検査。
+checkout外の安定コピーと `dgpy-flame` を追加。起動セッション環境、VERSION照合、
+bootstrap・重複・broken Probe・TOML検証を実装。既存hook、user profile、旧binを変更しない。
+新binへの導入と追加実機手順は [DEV_WORKFLOW](DEV_WORKFLOW.md)。
+検証結果と未確認事項は [今回の検証記録](validation/2026-10-09-launcher.md)。
+ソースcommit `73ed4723a8f40bc92657a67385e8c38810cae7ff`。
+macOS 26.7.1のFlame付属Python 3.11.5でPublic全88件、Internal4件とhook integration成功。
+実vendor起動先と仮hookのdry-runも成功。新launcherのGUI実機検証は未実施。
+CI用Python3.6.8 buildのsysconfig不足を修正した最終ソースcommit
+`9d394954ad1565ac52c3fcbb5a662bd9b8de6be9` の
+[CI 37913038785](https://github.com/71233/dg-python-scripts/actions/runs/37913038785)は
+Linux/macOSの全suite・wheelと実Python3.6.8／3.11.5入口検証がすべてsuccess。
+最新headのCIもPR checksで確認する。以降は過去のsnapshotとして扱う。
+
 ## 2026-10-09確認時点の公開repo
 
 main: `1764a9f258f4f9e788652a9ba37a9864dfcfdb15`。

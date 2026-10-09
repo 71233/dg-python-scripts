@@ -3,6 +3,22 @@
 基準: Flame 2025.2.7 / Python 3.11 / PySide6。
 2026系列は機能ごとに別の確認が必要。これはProject Instructionsへ固定しない。
 
+## 2026-10-09 ユーザー報告と追加変更の区別
+
+ユーザー報告: Flame 2025.2.7 Mac/LinuxでPublicメニュー、About/Diagnostics、
+Rename/Delete Markersメニューが動作。LinuxのPython 3.6.8では旧shebang入口でSyntaxError、
+Flame付属Python 3.11.5を明示した呼出しは成功。後者は旧helperの結果。
+旧文書の包括的な「実機未検証」と食い違うため、この最新報告を明示した。
+報告には検証時の両repoのfull commit/tree、全ログ、再現回数が揃っていない。
+Rename書込み／Marker削除の実測、新入口・launcherの成功をこの報告から推定しない。
+
+新実装: vendor startApplicationのVERSION=2025.2.7を照合し、論理pathを保持する。
+ローカルMacの付属Python 3.11.5を実行し、vendor scriptの版情報／製品選択処理を読んだ。
+Flameを起動した検証ではない。launch時のexec、子環境、hook/config拒否は仮環境のテスト。
+新入口・launcherのMac/Linux GUI起動は未検証。既存実hookと共有旧DGpyは変更していない。
+[検証記録](validation/2026-10-09-launcher.md) と [手順](DEV_WORKFLOW.md) を参照。
+以下の「未実施」は過去作業時の記録。
+
 ## 既存コードから確認できる契約
 
 以下は2026-10-09時点のmain `1764a9f`にある実装・テスト・コメントの整理。
