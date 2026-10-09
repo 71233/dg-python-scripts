@@ -6,7 +6,8 @@ cd /tmp
 tar -xf Python-3.6.8.tar.xz
 cd Python-3.6.8
 ./configure --without-ensurepip > /tmp/configure.log 2>&1
-make -j2 python > /tmp/make.log 2>&1 || { cat /tmp/make.log; exit 1; }
+# Include generated sysconfig data: a bare 'python' build cannot import site.
+make -j2 pybuilddir.txt > /tmp/make.log 2>&1 || { cat /tmp/make.log; exit 1; }
 mkdir -p /tmp/os-bin /opt/Autodesk/python/2025.2.7/bin
 ln -s /tmp/Python-3.6.8/python /tmp/os-bin/python3
 ln -s /usr/local/bin/python3 /opt/Autodesk/python/2025.2.7/bin/python3
