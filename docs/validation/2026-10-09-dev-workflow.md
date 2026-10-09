@@ -31,3 +31,13 @@ Linux/macOS CIのPython 3.11、wheel build結果は最終headのchecksで別途�
 次の操作: DEV_WORKFLOWのFlame実機手順をMac/Linuxで実施し、repo/branch/full commit/tree、
 OS/Flame/Python版、module path、menu回数、再起動後の反映を記録する。
 非公開環境・ログはInternalだけに置く。
+
+## GitHub CIの観測
+
+検証したソースcommit: `9eae27315ab8669bc42e4e826231bec4082ac6a4`。
+[CI 37879066268](https://github.com/71233/dg-python-scripts/actions/runs/37879066268) の
+ubuntu-24.04 / macos-15がともにsuccess。Python 3.11 unit testとwheel buildの各stepもsuccess。
+Linux job logでは75件成功を確認した。CIはFlameなしの仮repo/仮hook検証である。
+
+Public/Internalともソース修正を既存PRへ反映し、ローカルは公開済みcommitとtree一致を
+検証して同期、cleanを確認した。この追記は文書のみで、上記ソースの追加変更はない。

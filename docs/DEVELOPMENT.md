@@ -57,7 +57,9 @@ PR #4と既存branchを再利用し、Status HUD PR #3は変更していない�
 - setup/statusに追加hook検索先と環境変数からの重複候補検出を追加。既存hookは変更しない。
 - ローカルmacOS 26.7.1: Python 3.9.6 helper安全性29件、Python 3.12.15 Public全75件成功。
   bare repo/仮hook先のみ使用。Mac/Linux既定pathはmockで確認し、Linux実行結果とは区別する。
-- CIにLinux/macOS matrixを追加。新しいheadでの実行結果はPR checksと検証記録を確認する。
+- CIにLinux/macOS matrixを追加。ソースcommit `9eae27315ab8669bc42e4e826231bec4082ac6a4` の
+  [CI 37879066268](https://github.com/71233/dg-python-scripts/actions/runs/37879066268) が両OSで成功。
+  Python 3.11全75件とwheel build成功。文書のみの追記commitはPR checksも確認する。
 - 検証の対象・制約・次の操作は [検証記録](validation/2026-10-09-dev-workflow.md)。
 
 Flame 2025.2.7は両OSとも実機未検証。PRはdraftを維持し、mergeは行わない。
