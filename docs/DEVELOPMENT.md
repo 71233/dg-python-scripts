@@ -24,7 +24,7 @@ Internal repoの開発状態・Probe一覧・非公開結果はInternalの `docs
 
 ## 開発環境補助の変更
 
-branch: `chore/dev-workflow`。既存Status HUDとは独立した変更。
+branch: `chore/dev-workflow`、[PR #4](https://github.com/71233/dg-python-scripts/pull/4) (draft)。既存Status HUDとは独立した変更。
 `tools/dgpy_dev.py`は更新・状態・branch切替・symlink配置・環境表示・安定したtool installを提供。
 既存配置保護とGit操作の安全条件はDEV_WORKFLOWに記載。
 既存CIはLinux上でPython 3.11のsuiteとwheelを検証する。
