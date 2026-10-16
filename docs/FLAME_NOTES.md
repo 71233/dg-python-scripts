@@ -1,5 +1,17 @@
 # Flame仕様・検証記録
 
+## 最新状況 — 2026-10-16 Linux実機のユーザー報告
+
+2台目のLinuxワークステーション / Flame 2025.2.7で、`dgpy-status`直接実行と
+付属Python 3.11.5の自動選択、`dgpy-flame --dry-run`、`dgpy-flame`のGUI起動・Public基本動作、
+設定付きExtension起動・基本動作の成功報告を受領した。直接実測とは区別する。
+Rename実書込み・Marker実削除・Probeは未検証。実機の両repo commit/tree/dirty状態とログは未提供。
+開始時の両ローカルrepoはcleanで既存PR headと一致。今回の文書変更とPR本文更新に既存branchを使い、
+Public PR #4 / Internal PR #1はDraft・未mergeを維持する。
+詳細なGit snapshot、報告範囲、未確認事項・次の操作は[10月16日の検証記録](validation/2026-10-16-linux-host-report.md)を参照。
+以下の10月9日以前の「未検証」は当時の履歴として読む。実機の詳細来歴取得、使い捨て対象での
+変更処理・Probe検証、Mac新launcher GUI、User/branch切替後の反映等は残タスク。
+
 基準: Flame 2025.2.7 / Python 3.11 / PySide6。
 2026系列は機能ごとに別の確認が必要。これはProject Instructionsへ固定しない。
 
