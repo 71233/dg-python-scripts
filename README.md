@@ -17,6 +17,17 @@ Autodesk Flame専用のPythonツール基盤。主リポジトリは
 Pythonのdistribution名とimport名は同じ語をハイフン／アンダースコアで表現し、
 既存の `dgpy` 名前空間とは分離します。Flame UI上では短いブランド名 `DGpy` を維持します。
 
+## 最初の導入・マシン切替
+
+Mac / Linuxで初回導入・再実行できる `tools/dgpy-machine.sh` を
+[マシン別導入手順](docs/MACHINE_SETUP.md) に追加しました（開発中、
+[PR #4](https://github.com/71233/dg-python-scripts/pull/4)）。
+ローカルではGit checkoutの取得／fast-forwardから、ユーザーのFlame Hookへ
+`dgpy_bootstrap.py` のsymlink配置、コマンドの導入までを行います。
+共有checkoutを変更したくないLinux端末では `--shared` でユーザー側だけ構成します。
+既存ファイルを無断で上書きせず、`--apply` まではプレビューのみです。
+これらは自動テスト対象であり、Flame GUIでの最終確認は別途必要です。
+
 ## 対象と構成
 
 - **Primary:** Flame 2025.2.7 / Python 3.11 / PySide6。
