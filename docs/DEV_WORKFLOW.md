@@ -4,6 +4,15 @@
 `dgpy-flame`だけがFlameを起動する。CoreとTOML検証にはPython 3.11以上が必要。
 更新／切替中はFlameでDGpyを実行せず、エディタや別のGit操作も止める。
 
+## 1スクリプトでのマシン別導入・再更新
+
+[DGpy machine setup](MACHINE_SETUP.md) の `tools/dgpy-machine.sh` で初回clone、
+安全なfast-forward、ユーザーHookのsymlink配置、コマンド導入をまとめて実行できる。
+公開側だけ、Internal込み、既存共有checkoutに接続する `--shared` を選択可能。
+`--shared` はGitを一切変更しない。最初はプレビュー、明示 `--apply` のみ変更。
+LinuxでFlame Userを切り替える運用では、そのUserをロードしてから実行する。
+以下は従来の個別手順であり、新スクリプトが未検証の場合や詳細診断に利用する。
+
 ## 初回セットアップ
 
 両OSで同じ構造を使用する。Internalの取得にはGitHubのアクセス権が必要。
