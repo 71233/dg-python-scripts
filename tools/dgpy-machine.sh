@@ -215,9 +215,10 @@ if [ -e "$current" ] || [ -L "$current" ]; then
     case "$old" in "$versions/"*) ;; *) stop "Foreign command symlink protected: $current" ;; esac
 fi
 "$python" -I -c 'import os,sys; os.replace(sys.argv[1],sys.argv[2])' "$next_link" "$current"
-note "READY: $current/dgpy-status"
-note "START: $current/dgpy-flame --dry-run"
+note "READY: $current/dgpy-status --root $root --repo $repo_scope"
+note "START: $current/dgpy-flame --root $root --dry-run"
 if [ "$include_internal" = yes ]; then
-    note "INTERNAL: $current/dgpy-flame --with-internal --config $config --dry-run"
+    note "INTERNAL: $current/dgpy-flame --root $root --with-internal --config $config --dry-run"
 fi
+note 'Run the listed commands with --root when using a non-default checkout.'
 note 'Restart Flame after a source/config change. Normal GUI launch does not inherit launcher-only PYTHONPATH.'
