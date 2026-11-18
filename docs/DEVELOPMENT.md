@@ -1,5 +1,22 @@
 # Development — 作業再開の入口
 
+## 2026-11-18 マシン別インストール・更新の整備
+
+マシン切替時の作業を減らすため、既存 Public PR #4 (`chore/dev-workflow`)
+を再利用し、`tools/dgpy-machine.sh` を追加。Publicのみ／Internal込み、
+新規cloneと安全なfast-forward更新、ユーザーFlame Hookのsymlink確認・配置、
+checkout外のversioned helper導入を1つの入口にまとめた。
+共有checkout利用は `--shared` とし、clone/fetch/updateをしない。
+従来の `dgpy-update` / `dgpy-setup` / `dgpy-flame` を再利用し、
+ユーザーの変更、既存Hook、Flame User、旧bin、シェル設定は自動変更しない。
+詳細は [MACHINE_SETUP.md](MACHINE_SETUP.md)。
+`tests/test_machine_setup.py` は仮Git origin / 仮Hookを使う追加テスト。
+開発環境のshell fixtureではpreview・導入・再実行・更新・dirty保護・shared
+更新禁止・ユーザー設定保持を確認した。GitHub最新CIとMac/Linux実機検証は
+別途確認が必要で、Flame GUI検証済みとしない。PRはDraft・未mergeのまま。
+Internal repoには本導入ロジックを重複実装しない。
+
+
 ## 最新状況 — 2026-10-16 Linux実機のユーザー報告
 
 2台目のLinuxワークステーション / Flame 2025.2.7で、`dgpy-status`直接実行と
