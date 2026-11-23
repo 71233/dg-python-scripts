@@ -146,12 +146,12 @@ added ten new cases: **73/73** v2 tests passed on disposable Python
 preflight/journal/lifecycle/v2 fixtures passed. The changed source
 and tests parse under Python 3.11 grammar.
 
-The previous [CI run 45174850123](https://github.com/71233/dg-python-scripts/actions/runs/45174850123)
-passed 330 Public tests on the **earlier** v2 layout. It does
-**not** validate the identity-binding changes. Confirm the
-current Draft PR head's full Python 3.11 CI separately before reporting
-that result. None of these tests establishes runtime compatibility
-with Flame's exact bundled Python 3.11.5 on macOS.
+The updated [CI run 45176255751](https://github.com/71233/dg-python-scripts/actions/runs/45176255751)
+**passed** on Ubuntu 24.04 / Python 3.11 with **340/340 Public
+unit tests**, editable installation and wheel build. This latest
+run includes the ten identity-binding tests. Neither local
+tests nor Linux CI establishes runtime compatibility with Flame's
+exact bundled Python 3.11.5 on macOS.
 
 See [2026 Hook preflight](2026_HOOK_PREFLIGHT.md) and
 [NO-APPLY lifecycle design](2026_HOOK_LIFECYCLE_DESIGN.md).
