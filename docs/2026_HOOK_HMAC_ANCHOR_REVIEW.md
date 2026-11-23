@@ -131,8 +131,10 @@ absence of filesystem operations. The adjacent 38 preflight, 42 managed-link
 and 43 chain tests bring the isolated Python 3.13.5 total to **168**.
 Python 3.11 grammar parsing succeeded for the new code and tests.
 
-These are **unit tests only**. Verify the **current PR head's** GitHub
-Actions full Python 3.11 suite before recording the new CI result.
+These are **unit tests only**. GitHub Actions
+[CI run 45163143326](https://github.com/71233/dg-python-scripts/actions/runs/45163143326)
+**passed** on Ubuntu 24.04 / Python 3.11 with **214/214 Public unit
+tests** (including the new 45 cases), editable install, and wheel build.
 Nothing here verifies the exact Flame-bundled Python 3.11.5 on macOS,
 actual Hook loading, UI, Selection, or recovery.
 
