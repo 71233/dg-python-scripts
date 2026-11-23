@@ -96,8 +96,11 @@ whether a prior symlink was installed/removed.
   values**, not a production secret.
 - The 44 mocked tests passed in a disposable Python **3.13.5**
   container. New source and both test files parsed using Python 3.11
-  grammar. The nine integration tests are intended for the complete
-  GitHub CI suite; record their result only after that run finishes.
+  grammar. The nine HMAC/journal integration tests and all Public tests
+  passed in [GitHub Actions run 45168207871](https://github.com/71233/dg-python-scripts/actions/runs/45168207871):
+  **267/267** on Ubuntu 24.04 / Python **3.11**, including editable
+  package installation and successful wheel build.
+  This is not Flame's exact Python 3.11.5 on macOS.
 
 This scope is deliberately separate from existing
 [Hook preflight](2026_HOOK_PREFLIGHT.md),
