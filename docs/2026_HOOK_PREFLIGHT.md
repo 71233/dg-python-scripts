@@ -1,5 +1,21 @@
 # Flame 2026.2.3 Hook deployment preflight (experimental)
 
+## Read-only generation-bound HMAC v2 (no automatic fallback)
+
+The experimental [v2 anchor review](2026_HOOK_ANCHOR_V2_PREVIEW.md)
+adds an independent in-memory validator that MAC-binds
+`key_generation` plus the transaction identity, scope, revision,
+terminal state and journal SHA-256 tip. The previous v1 custody
+review remains unchanged and blocks generation 2+; this is **not**
+a production key rotation or migration.
+
+Disposable Python 3.13.5 tests: **63/63** v2 fixtures, or **186/186**
+combined with available existing preflight, journal and lifecycle
+fixtures. The code and tests parse under Python 3.11 grammar.
+**Current PR-head full Public Python 3.11 CI remains a separate gate**.
+Flame's exact macOS Python 3.11.5 and actual Hook operation remain
+unverified. All preview results are non-actionable.
+
 ## Custody-aware recovery preview (pure Python, NO APPLY)
 
 [Read-only key custody/recovery gating](2026_KEY_CUSTODY_RECOVERY_PREVIEW.md)
