@@ -1,5 +1,21 @@
 # Flame 2026.2.3 — keyed journal anchor preview (NO APPLY)
 
+## Companion key custody and interrupted-recovery gate
+
+The base HMAC verifier does **not** check revoked/retired keys or
+independently trusted current revisions by itself. The separate
+[read-only custody/recovery preview](2026_KEY_CUSTODY_RECOVERY_PREVIEW.md)
+`assess_recovery_preview()` adds these external metadata gates **before**
+calling this HMAC implementation. It blocks unknown trust, retired/revoked
+keys, generation 2+, stale or inconsistent revisions, and incomplete
+journal inputs. Even when both previews match, **NO CHANGE** is the
+only non-blocked recommendation; there is no installer or recovery API.
+
+The v1 HMAC does **not cryptographically bind a generation number**.
+Consequently the new wrapper allows generation 1 only. Key rotation and
+a protected monotonic version source remain future design and separate
+independent verification work.
+
 **Status: experimental, isolated-test-only verification.** The new
 `deployment/anchor_review.py` is a **pure, read-only** HMAC-SHA256 verifier for
 an externally supplied anchor plus an in-memory journal event list. It neither
