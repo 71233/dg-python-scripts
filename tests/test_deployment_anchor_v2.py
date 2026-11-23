@@ -38,8 +38,8 @@ def sample_events(count=3, transaction_id="fixture-tx"):
 def sign_fixture(anchor, key=TEST_KEY, domain=DOMAIN_V2):
     """Only test fixtures may sign; production API intentionally cannot."""
     payload = [anchor.protocol, anchor.flame_version, anchor.scope,
-               anchor.transaction_id, anchor.key_id, anchor.key_generation,
-               anchor.revision, anchor.event_count, anchor.terminal_state,
+               anchor.deployment_id, anchor.transaction_id, anchor.key_id,
+               anchor.key_generation, anchor.revision, anchor.event_count, anchor.terminal_state,
                anchor.tip_sha256]
     digest = hmac.new(key, domain + json.dumps(
         payload, ensure_ascii=True, separators=(",", ":"),
@@ -47,20 +47,23 @@ def sign_fixture(anchor, key=TEST_KEY, domain=DOMAIN_V2):
     return replace(anchor, mac_sha256=digest)
 
 
-def make_fixture(generation=2, count=3, scope="user", transaction="fixture-tx"):
+def make_fixture(generation=2, count=3, scope="user", transaction="fixture-tx",
+                 deployment="fixture-deployment-A"):
     events = sample_events(count, transaction)
     revision = 1 if count == 3 else 2
     terminal = "ACTIVE" if count == 3 else "DISABLED"
     tip = events[-1].event_sha256
     anchor = sign_fixture(V2Anchor(
         protocol="DGpy-Hook-Anchor-v2", flame_version="2026.2.3",
-        scope=scope, transaction_id=transaction, key_id="fixture-key-v2",
+        scope=scope, deployment_id=deployment,
+        transaction_id=transaction, key_id="fixture-key-v2",
         key_generation=generation, revision=revision, event_count=count,
         terminal_state=terminal, tip_sha256=tip, mac_sha256="0" * 64,
     ))
     state = V2KeyState(
         protocol="DGpy-Key-Custody-v2", flame_version="2026.2.3",
-        scope=scope, transaction_id=transaction, key_id="fixture-key-v2",
+        scope=scope, deployment_id=deployment,
+        transaction_id=transaction, key_id="fixture-key-v2",
         generation=generation, lifecycle_state="ACTIVE",
         latest_revision=revision, latest_tip_sha256=tip,
     )
@@ -68,7 +71,8 @@ def make_fixture(generation=2, count=3, scope="user", transaction="fixture-tx"):
         key_origin_verified=True, key_status_verified=True,
         checkpoint_origin_verified=True, anchor_origin_verified=True,
         isolated_environment_confirmed=True, expected_scope=scope,
-        expected_transaction_id=transaction, expected_key_id="fixture-key-v2",
+        expected_deployment_id=deployment, expected_transaction_id=transaction,
+        expected_key_id="fixture-key-v2",
         expected_generation=generation, expected_revision=revision,
         expected_tip_sha256=tip,
     )
@@ -127,6 +131,54 @@ class AnchorV2Tests(unittest.TestCase):
             trusted_key=Explosive(), evidence=V2Evidence(),
         )
         self.assertEqual([x.code for x in result.findings], ["key_origin_unverified"])
+
+    def test_missing_expected_deployment_id_blocks(self):
+        self.blocked("invalid_expected_deployment_id", proof=replace(
+            self.proof, expected_deployment_id=None))
+
+    def test_deployment_path_as_id_blocks(self):
+        self.blocked("invalid_expected_deployment_id", proof=replace(
+            self.proof, expected_deployment_id="/private/workstation"))
+
+    def test_deployment_id_rejects_str_subclass(self):
+        class EvilId(str):
+            pass
+        self.blocked("invalid_expected_deployment_id", proof=replace(
+            self.proof, expected_deployment_id=EvilId("fixture-deployment-A")))
+
+    def test_wrong_key_state_deployment_blocks(self):
+        self.blocked("key_state_identity_mismatch", state=replace(
+            self.state, deployment_id="fixture-deployment-B"))
+
+    def test_wrong_anchor_deployment_blocks(self):
+        self.blocked("anchor_identity_mismatch", anchor=replace(
+            self.anchor, deployment_id="fixture-deployment-B"))
+
+    def test_reused_transaction_wrong_expected_deployment_blocks(self):
+        # Even with the same key ID, transaction ID and event tip, the
+        # expected deployment must be an independent input.
+        proof = replace(self.proof, expected_deployment_id="fixture-deployment-B")
+        self.blocked("key_state_identity_mismatch", proof=proof)
+
+    def test_same_key_and_transaction_different_deployments_have_distinct_mac(self):
+        _, _, other_anchor, _ = make_fixture(deployment="fixture-deployment-B")
+        self.assertNotEqual(self.anchor.mac_sha256, other_anchor.mac_sha256)
+
+    def test_empty_anchor_deployment_blocks(self):
+        self.blocked("invalid_anchor_identity", anchor=replace(
+            self.anchor, deployment_id=""))
+
+    def test_untrusted_deployment_swap_cannot_reuse_mac(self):
+        # Changing the context and external claims without the key fails.
+        proof = replace(self.proof, expected_deployment_id="fixture-deployment-B")
+        state = replace(self.state, deployment_id="fixture-deployment-B")
+        anchor = replace(self.anchor, deployment_id="fixture-deployment-B")
+        self.blocked("anchor_v2_mac_mismatch", proof=proof, state=state, anchor=anchor)
+
+    def test_independent_new_deployment_uses_new_mac(self):
+        events, state, anchor, proof = make_fixture(deployment="fixture-deployment-B")
+        result = self.review(events=events, state=state, anchor=anchor, proof=proof)
+        self.assertEqual((result.status, result.next_step), ("PREVIEW_ONLY", "NO_CHANGE"))
 
     def test_untrusted_key_status_blocks(self):
         self.blocked("key_status_unverified", proof=replace(self.proof, key_status_verified=False))
