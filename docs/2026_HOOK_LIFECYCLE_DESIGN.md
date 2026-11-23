@@ -1,5 +1,19 @@
 # Flame 2026.2.3 — single-Bootstrap lifecycle design (NO APPLY)
 
+## Per-deployment identity is not verified by a MAC alone
+
+The experimental v2 verifier now includes an opaque
+`deployment_id` in its HMAC and checks it against separately
+supplied current key state and expected evidence. This distinguishes
+different *claimed* Hook destinations even when scope, transaction ID,
+and key ID happen to be reused.
+
+An external authority must still establish that the ID really belongs
+to the effective machine/User/Hook destination/source at the time of
+the operation. A claimed ID or `True` flag is not independent proof.
+No installer or disable/restore transition consumes the review result;
+v2 remains a **NO-APPLY** prototype.
+
 ## Experimental generation-bound v2 HMAC (no key service)
 
 An [opt-in v2 HMAC preview](2026_HOOK_ANCHOR_V2_PREVIEW.md)
