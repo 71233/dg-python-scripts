@@ -1,5 +1,16 @@
 # Flame 2026.2.3 — key custody and interrupted-recovery preview (NO APPLY)
 
+## Experimental v2 verifier does not relax v1 custody
+
+A [separate generation-bound v2 HMAC preview](2026_HOOK_ANCHOR_V2_PREVIEW.md)
+now accepts explicitly *expected* positive generation values after
+binding them cryptographically. That v2 entry point is **not called by
+this module** and makes no automatic v1-to-v2 migration. This v1
+`assess_recovery_preview()` remains restricted to **generation 1**.
+Key generation, rotation, revocation, independent anti-replay checkpoint
+and operational recovery still need separate independently verified
+authorities and isolated Flame tests.
+
 **Status: experimental, isolated-test-only, read-only.** The
 `deployment/custody_review.py` module adds
 `assess_recovery_preview()` to put a **key lifecycle and independently
