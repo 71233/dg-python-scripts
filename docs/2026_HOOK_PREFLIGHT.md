@@ -1,5 +1,22 @@
 # Flame 2026.2.3 Hook deployment preflight (experimental)
 
+## v2 security review — deployment identity bound (read-only)
+
+The [experimental v2 anchor preview](2026_HOOK_ANCHOR_V2_PREVIEW.md)
+now binds an **opaque per-deployment ID** in its HMAC as well as the
+key generation, scope and journal checkpoint. Separate Hook targets
+must not share an unreviewed identity. Without a matching independently
+expected deployment ID the preview BLOCKS. This does **not** prove
+actual machine/profile/root ownership: the external identity issuer,
+checkpoint authority and Hook-to-identity verification do not yet exist.
+
+Ten additional disposable fixture cases cover missing IDs, mismatches,
+a changed context without a new MAC and identity substitution.
+Python 3.13.5: v2 **73/73**; combined available
+preflight/journal/lifecycle/v2 **196/196**.
+The earlier 330-test GitHub CI predates these changes; verify
+the latest PR-head CI separately. Production Hook placement remains NO-GO.
+
 ## Read-only generation-bound HMAC v2 (no automatic fallback)
 
 The experimental [v2 anchor review](2026_HOOK_ANCHOR_V2_PREVIEW.md)
