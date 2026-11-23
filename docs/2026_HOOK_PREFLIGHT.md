@@ -1,5 +1,25 @@
 # Flame 2026.2.3 Hook deployment preflight (experimental)
 
+## Latest isolated HMAC anchor review (NO APPLY)
+
+The new [HMAC anchor preview](2026_HOOK_HMAC_ANCHOR_REVIEW.md)
+adds `JournalAnchor`, `AnchorReviewEvidence`, and
+`assess_hmac_journal_preview()` as another **pure in-memory** assessment.
+This does not sign/store keys or journals, authenticate external key
+provenance, touch Flame, or perform a state-changing action. HMAC binds
+expected identity/revision and an externally supplied key to a journal
+tip, then delegates to the existing chain review. Missing or
+untrustworthy external evidence returns `BLOCKED`; even a matching
+HMAC is **not authorization to unlink/install/restore**.
+
+The isolated Python 3.13.5 deployment subset now passes **168/168**
+tests (existing 38 preflight + 42 managed-link + 43 journal + **45 HMAC**
+fixtures). Python 3.11 grammar parsing succeeded for the new modules
+and tests. Earlier full-suite CI with 169 tests predated these 45 cases;
+the **current PR-head CI** must be reviewed separately before
+claiming updated full-suite success. macOS Flame 2026.2.3 Python
+3.11.5 and real Hook behaviour remain unverified.
+
 This is a **read-only, fail-closed assessment** for planning DGpy's single
 `dgpy_bootstrap.py` placement. It is **not an installer**, repair utility,
 or authorization to touch production Flame Hook directories. The implementation does not include a CLI or an `apply` action; neither
