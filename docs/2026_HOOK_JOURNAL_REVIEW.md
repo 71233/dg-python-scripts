@@ -1,5 +1,27 @@
 # Flame 2026.2.3 — in-memory Hook journal consistency review (NO APPLY)
 
+## Separate HMAC anchor verification prototype (isolated only)
+
+The unkeyed `assess_journal_preview()` remains unchanged: it checks
+the SHA-256 chain and an operator-asserted independent tip, **not**
+cryptographic authentication. A **separate read-only**
+[`assess_hmac_journal_preview()`](2026_HOOK_HMAC_ANCHOR_REVIEW.md)
+now validates an HMAC-SHA256 anchor under an externally supplied key
+**before** allowing the bounded event list to be reviewed.
+
+The HMAC binds Flame version, User/Shared scope, key ID, transaction ID,
+terminal state, number of events and revision as well as journal tip.
+No key is created, persisted, retrieved from the OS or written to a
+journal by DGpy. External key provenance, genuine anchor custody, trusted
+anti-replay revision and an isolated test environment must be established
+**independently**. Both `PREVIEW_ONLY` results are non-actionable and do
+**not** authorize install, disable, unlink, restore or profile changes.
+
+A compromised or substituted key/anchor authority can fabricate a
+valid-looking chain. **Neither module claims real Hook state, actual
+journal authenticity, or MAC-backed production recovery.**
+See the companion HMAC design for explicit limits and test evidence.
+
 **Status:** prototype for disposable fixtures only. It verifies a *bounded,
 in-memory representation* of a proposed Hook transaction journal. It does
 **not** open/write/authenticate a journal, start/stop Flame, install a Hook,
