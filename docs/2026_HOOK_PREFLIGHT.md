@@ -12,9 +12,11 @@ a production key rotation or migration.
 Disposable Python 3.13.5 tests: **63/63** v2 fixtures, or **186/186**
 combined with available existing preflight, journal and lifecycle
 fixtures. The code and tests parse under Python 3.11 grammar.
-**Current PR-head full Public Python 3.11 CI remains a separate gate**.
-Flame's exact macOS Python 3.11.5 and actual Hook operation remain
-unverified. All preview results are non-actionable.
+[GitHub Actions CI run 45174550652](https://github.com/71233/dg-python-scripts/actions/runs/45174550652)
+**passed** on Ubuntu 24.04 / Python 3.11 with **330/330 Public
+unittest cases**, editable install and wheel build. Flame's exact
+macOS Python 3.11.5 and actual Hook operation remain unverified.
+All preview results are non-actionable.
 
 ## Custody-aware recovery preview (pure Python, NO APPLY)
 
