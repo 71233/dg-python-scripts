@@ -85,14 +85,18 @@ Run in a disposable checkout/fixture environment, not by installing in Flame:
 PYTHONPATH=src python3 -B -m unittest discover -s tests -p 'test_deployment_preflight.py' -v
 ```
 
-The original prototype's 29 disposable-directory tests cover the stop
-conditions, source conflicts, symlinks (including dangling links),
-world-writable roots, duplicate basenames, missing Project directories, and
-non-mutating behavior. They were run with Python 3.13.5 in an isolated
-container; Python 3.11 grammar was checked, but **Python 3.11.5 runtime
-execution and the existing full Public test suite remain unverified** until
-an appropriate environment or CI run is available. Do not present these
-unit tests as Flame 2026 integration testing.
+The initial 29 disposable-directory tests cover the stop conditions,
+source conflicts, symlinks (including dangling links), world-writable
+roots, duplicate basenames, missing Project directories, and non-mutating
+behavior. They passed on Python 3.13.5 in an isolated container; the new
+source also parsed under Python 3.11 grammar.
+
+GitHub Actions [CI run 45154560937](https://github.com/71233/dg-python-scripts/actions/runs/45154560937)
+on Public Draft PR #6 passed on Ubuntu 24.04 with Python 3.11, including
+editable package install, the **full Public unittest discover suite** and
+wheel build. This does **not** verify the exact Flame-shipped Python 3.11.5
+runtime on macOS, actual Flame Hook imports or menu behavior.
+Do not present these unit tests as Flame 2026 integration testing.
 
 Next stages, each requiring separate evidence:
 
