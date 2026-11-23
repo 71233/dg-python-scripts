@@ -3,9 +3,10 @@
 **Status: design and preview-only verification.** This document does not
 authorize a Flame Hook installation or disable operation. The implemented
 read-only functions are [`assess_bootstrap()`](2026_HOOK_PREFLIGHT.md)
-and `assess_disable_preview()` (`src/dg_python_scripts/deployment/lifecycle.py`).
-Both return sanitized codes only. **Neither provides an apply, disable, restore,
-reload, chmod, symlink creation or removal command.**
+and `assess_disable_preview()` (`src/dg_python_scripts/deployment/lifecycle.py`),
+plus the pure [in-memory journal consistency preview](2026_HOOK_JOURNAL_REVIEW.md).
+All return sanitized codes only. **No API provides an apply, disable,
+restore, reload, chmod, symlink creation or removal command.**
 
 The scope is the sole Public `dgpy_bootstrap.py` entry point. Public Core
 package source, optional Internal extensions, per-user settings, and any
@@ -121,6 +122,17 @@ as permission for a later write without rechecking.
 
 ## 4. Proposed private transaction record
 
+A new pure [journal consistency preview](2026_HOOK_JOURNAL_REVIEW.md)
+checks the proposed v1 event order (`INTENT`, `LINK_CREATED`, `ACTIVE`,
+`DISABLE_INTENT`, `DISABLED`) and SHA-256 hash chaining in **memory only**.
+The review requires an independently protected expected tip and isolation
+attestations before looking at any event. Incomplete histories BLOCK;
+a complete chain can only return `PREVIEW_ONLY`. A SHA-256 chain can be
+recalculated by someone who controls both journal and tip, so this check
+**is not authentication** and does not prove an installation/disable
+actually happened. No event log parser, writer or authenticator exists.
+
+
 If a separate installer is approved in the future, it should maintain a
 **private, outside-Hook** journal/manifest with restrictive permissions
 and atomic per-file writes, including:
@@ -161,8 +173,9 @@ a speculative `rm`, reset, or forced checkout.
 
 - No atomic multi-root snapshot, deep/masked Hook inventory, dynamic
   import detection, actual duplicate menu resolution, OS ACL evaluator,
-  physical storage proof, authenticated journal parser/writer, or installer
-  yet. The new disable-preview data model is **not** a journal system.
+  physical storage proof, authenticated journal parser/writer, secure tip
+  store, or installer yet. Neither the in-memory chain verifier nor the
+  disable-preview data model is an authenticated journal system.
 - Recheck root identity immediately before and immediately after any
   hypothetical operation; TOCTOU can still occur even with checks.
   Cross-machine Shared updates cannot be treated as one atomic operation.
