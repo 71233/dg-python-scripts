@@ -2,8 +2,8 @@
 
 This is a **read-only, fail-closed assessment** for planning DGpy's single
 `dgpy_bootstrap.py` placement. It is **not an installer**, repair utility,
-or authorization to touch production Flame Hook directories. The first
-implementation does not include a CLI or an `apply` action.
+or authorization to touch production Flame Hook directories. The implementation does not include a CLI or an `apply` action; neither
+preflight nor the companion disable preview can modify Hook files.
 
 The shared module lives in `src/dg_python_scripts/deployment/preflight.py`.
 It imports no Flame, Qt, or PySide modules. The public DGpy bootstrap remains
@@ -108,8 +108,23 @@ Flame-shipped Python 3.11.5 on macOS or real Flame Hook/menu behavior.
 Do not present these unit tests as Flame 2026 integration testing.
 
 See also [single-Bootstrap installation, disable and recovery design
-(NO APPLY)](2026_HOOK_LIFECYCLE_DESIGN.md). No state-changing operations
-have been implemented.
+(NO APPLY)](2026_HOOK_LIFECYCLE_DESIGN.md). The companion read-only
+`assess_disable_preview()` in `deployment/lifecycle.py` reviews an
+independently authenticated, previously recorded managed Bootstrap symlink
+**only inside a separately verified disposable environment**. It compares
+the Hook root, link, source identities and source SHA-256 with a supplied
+record; its findings are sanitized. There is **no journal reader/writer and
+no code that installs, disables, restores or changes a Hook**.
+
+The new `tests/test_deployment_lifecycle.py` adds **42 disposable-fixture
+tests** for absent/inauthentic evidence, unexpected metadata, world-writable
+roots, links replaced by files, missing sources, source edits, symlink
+aliases, SHA-256 mismatches, I/O failures and non-mutation. Together with
+the existing 38 preflight tests, **80/80 isolated Python 3.13.5 tests**
+passed in a disposable workspace; the new files parsed as Python 3.11
+grammar. The latest GitHub Python 3.11 full-suite CI run should be checked
+against the final PR head before claiming success. A production Mac is
+**not** used as a test fixture.
 
 Next stages, each requiring separate evidence:
 
