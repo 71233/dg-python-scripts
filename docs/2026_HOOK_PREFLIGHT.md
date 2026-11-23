@@ -122,9 +122,14 @@ roots, links replaced by files, missing sources, source edits, symlink
 aliases, SHA-256 mismatches, I/O failures and non-mutation. Together with
 the existing 38 preflight tests, **80/80 isolated Python 3.13.5 tests**
 passed in a disposable workspace; the new files parsed as Python 3.11
-grammar. The latest GitHub Python 3.11 full-suite CI run should be checked
-against the final PR head before claiming success. A production Mac is
-**not** used as a test fixture.
+grammar. GitHub Actions
+[CI run 45159372263](https://github.com/71233/dg-python-scripts/actions/runs/45159372263)
+**passed** on Ubuntu 24.04 / Python 3.11: editable package installation,
+**126/126 unittest cases** (42 new lifecycle, 38 existing preflight, and
+46 other Public tests), and a successful wheel build.
+This CI does **not** validate the exact macOS Flame 2026.2.3 bundled
+Python 3.11.5, real Hook loading, UI/Selection, or Profile restoration.
+A production Mac is **not** used as a test fixture.
 
 Next stages, each requiring separate evidence:
 
