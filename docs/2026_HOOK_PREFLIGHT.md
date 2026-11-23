@@ -11,10 +11,11 @@ Interrupted or inconsistent histories require manual reconciliation
 without any file changes. Matching records only produce `NO_CHANGE`.
 
 The new tests comprise **44 mocked custody boundary checks** and
-**9 HMAC/journal integration fixtures**. The mocked cases passed
-locally on Python 3.13.5; integration and full Public results must be
-taken from the GitHub CI run for the actual PR head. The exact
-macOS Flame 2026.2.3 Python 3.11.5 runtime remains unverified.
+**9 actual HMAC/journal integration fixtures**. The mocked cases passed
+locally on Python 3.13.5; [GitHub Actions CI 45168207871](https://github.com/71233/dg-python-scripts/actions/runs/45168207871)
+passed the **267-case full Public suite** and wheel build on Ubuntu 24.04
+/ Python 3.11. The exact macOS Flame 2026.2.3 Python 3.11.5 runtime
+remains unverified.
 
 ## Latest isolated HMAC anchor review (NO APPLY)
 
