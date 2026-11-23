@@ -1,5 +1,15 @@
 # Flame 2026 — opt-in Hook/Selection callback contract (NO HOST USE)
 
+## Additional G2 plan-audit layer (not part of callback dispatch)
+
+The [read-only Rename and MarkerDelete plan safety review](2026_ACTION_PLAN_SAFETY_REVIEW.md)
+inspects captured model data for duplicate host references and
+structural contradictions. It is independent of callback tuple review,
+does not call Flame or any write method, and has **no automatic
+connection to the existing SelectionBroker, menus or apply functions**.
+Successful preview does **not** establish live object capabilities,
+freshness, transaction rollback or authorization to delete markers.
+
 **Status: experimental, host-independent, and not connected to Flame.**
 
 The new `dg_python_scripts.actions.selection_contract` is a small pure-Python
