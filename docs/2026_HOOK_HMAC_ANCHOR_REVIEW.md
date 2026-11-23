@@ -1,5 +1,22 @@
 # Flame 2026.2.3 — keyed journal anchor preview (NO APPLY)
 
+## Separate v2 generation-bound preview (experimental, not a migration)
+
+The [v2 generation-bound HMAC preview](2026_HOOK_ANCHOR_V2_PREVIEW.md)
+is an **opt-in, separate** pure-Python function
+`assess_v2_anchor_preview()` that includes key generation within the
+authenticated fields and has its own MAC domain and protocol string.
+It also matches an independently asserted current **revision and journal
+tip** before inspecting events. It does **not** change the v1 verifier
+or create an automatic protocol upgrade/fallback.
+
+This is **not a production key rotation service**. Secret generation,
+key ID uniqueness, protected monotonic checkpoint storage and the
+independent trusted key authority remain unimplemented. Even
+`PREVIEW_ONLY` means `NO_CHANGE`, never installer/disable/restore
+authorization. The original v1 custody preview continues to BLOCK
+generation 2+.
+
 ## Companion key custody and interrupted-recovery gate
 
 The base HMAC verifier does **not** check revoked/retired keys or
