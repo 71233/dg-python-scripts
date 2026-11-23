@@ -35,6 +35,7 @@ class V2Anchor:
     protocol: str
     flame_version: str
     scope: str
+    deployment_id: str
     transaction_id: str
     key_id: str
     key_generation: int
@@ -52,6 +53,7 @@ class V2KeyState:
     protocol: str
     flame_version: str
     scope: str
+    deployment_id: str
     transaction_id: str
     key_id: str
     generation: int
@@ -70,6 +72,7 @@ class V2Evidence:
     anchor_origin_verified: bool = False
     isolated_environment_confirmed: bool = False
     expected_scope: str | None = None
+    expected_deployment_id: str | None = None
     expected_transaction_id: str | None = None
     expected_key_id: str | None = None
     expected_generation: int | None = None
@@ -123,9 +126,9 @@ def assess_v2_anchor_preview(
 ) -> V2Review:
     """Review v2 HMAC + v1 journal-chain semantics, all in memory.
 
-    Requires a separately protected, independent latest generation/revision/
-    tip checkpoint, key state and key material. No actual trust provider,
-    anti-replay authority, or key lifecycle is implemented in this function.
+    Requires a separately protected, independent deployment identity,
+    latest generation/revision/tip checkpoint, key state and key material.
+    No actual trust provider, anti-replay authority or key lifecycle exists.
     """
     # Fail before accessing key_state/anchor/key/events if ANY independent
     # attestation or expected external identity is untrusted/malformed.
@@ -143,6 +146,8 @@ def assess_v2_anchor_preview(
         return _stop("isolated_environment_unconfirmed")
     if type(evidence.expected_scope) is not str or evidence.expected_scope not in _SCOPES:
         return _stop("invalid_expected_scope")
+    if not _valid_id(evidence.expected_deployment_id):
+        return _stop("invalid_expected_deployment_id")
     if not _valid_id(evidence.expected_transaction_id):
         return _stop("invalid_expected_transaction_id")
     if not _valid_id(evidence.expected_key_id):
@@ -166,7 +171,11 @@ def assess_v2_anchor_preview(
         return _stop("unsupported_key_state_version")
     if type(key_state.scope) is not str or key_state.scope not in _SCOPES:
         return _stop("invalid_key_state_scope")
-    if not _valid_id(key_state.transaction_id) or not _valid_id(key_state.key_id):
+    if (
+        not _valid_id(key_state.deployment_id)
+        or not _valid_id(key_state.transaction_id)
+        or not _valid_id(key_state.key_id)
+    ):
         return _stop("invalid_key_state_identity")
     if not _valid_generation(key_state.generation):
         return _stop("invalid_key_state_generation")
@@ -178,6 +187,7 @@ def assess_v2_anchor_preview(
         return _stop("invalid_key_state_checkpoint")
     if (
         key_state.scope != evidence.expected_scope
+        or key_state.deployment_id != evidence.expected_deployment_id
         or key_state.transaction_id != evidence.expected_transaction_id
         or key_state.key_id != evidence.expected_key_id
         or key_state.generation != evidence.expected_generation
@@ -203,7 +213,11 @@ def assess_v2_anchor_preview(
         return _stop("unsupported_anchor_version")
     if type(anchor.scope) is not str or anchor.scope not in _SCOPES:
         return _stop("invalid_anchor_scope")
-    if not _valid_id(anchor.transaction_id) or not _valid_id(anchor.key_id):
+    if (
+        not _valid_id(anchor.deployment_id)
+        or not _valid_id(anchor.transaction_id)
+        or not _valid_id(anchor.key_id)
+    ):
         return _stop("invalid_anchor_identity")
     if not _valid_generation(anchor.key_generation):
         return _stop("invalid_anchor_generation")
@@ -219,6 +233,7 @@ def assess_v2_anchor_preview(
         return _stop("invalid_anchor_digest")
     if (
         anchor.scope != evidence.expected_scope
+        or anchor.deployment_id != evidence.expected_deployment_id
         or anchor.transaction_id != evidence.expected_transaction_id
         or anchor.key_id != evidence.expected_key_id
         or anchor.key_generation != evidence.expected_generation
@@ -230,12 +245,15 @@ def assess_v2_anchor_preview(
     ):
         return _stop("anchor_checkpoint_mismatch")
 
+    # Bind an opaque per-deployment ID in addition to scope. Its actual
+    # uniqueness and provenance are NOT verified by this module.
     # Explicit domain separation + fixed ordered canonical input. Generation
     # is included in the HMAC; unlike v1, generation substitution changes MAC.
     canonical = json.dumps(
         [_V2_PROTOCOL, anchor.flame_version, anchor.scope,
-         anchor.transaction_id, anchor.key_id, anchor.key_generation,
-         anchor.revision, anchor.event_count, anchor.terminal_state,
+         anchor.deployment_id, anchor.transaction_id, anchor.key_id,
+         anchor.key_generation, anchor.revision, anchor.event_count,
+         anchor.terminal_state,
          anchor.tip_sha256],
         ensure_ascii=True, separators=(",", ":"),
     ).encode("ascii")
