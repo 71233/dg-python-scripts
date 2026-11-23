@@ -1,5 +1,22 @@
 # Flame 2026.2.3 — single-Bootstrap lifecycle design (NO APPLY)
 
+## Custody and manual-reconciliation gate (read-only proposal)
+
+The new [key custody and recovery preview](2026_KEY_CUSTODY_RECOVERY_PREVIEW.md)
+adds a conservative `assess_recovery_preview()` wrapper **before** the
+existing HMAC anchor and journal chain validation. This is **not** a
+key manager: key revocation, rotation and current revision are **claimed
+by independently attested metadata**, not verified against a protected
+live authority by DGpy. Revoked/retired keys and unknown status BLOCK.
+The HMAC anchor v1 does not authenticate generation, so generation 2+
+blocks rather than quietly permitting key reuse.
+
+Interrupted histories, invalid MACs and mismatched records return
+`BLOCKED` with `MANUAL_RECONCILIATION`, not an automatic retry.
+A matching record returns `PREVIEW_ONLY` and `NO_CHANGE`, not
+`ACTIVE` permission, an unlink directive or a restore operation.
+Neither path changes any filesystem object.
+
 ## HMAC-anchored journal preview — no key custody or production authorization
 
 Public Core now has an isolated-only
