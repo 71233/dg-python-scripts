@@ -14,7 +14,9 @@ and unknown `sysconfig.cfg` / Shared network failover state.
 of fabricated records is not authentication, and the preview is not
 wired into v2 to authorize anything. The new module has no filesystem
 reads or writes. **39 fixture tests** passed under isolated Python
-3.13.5; GitHub full-suite CI is tracked separately.
+3.13.5; [GitHub Actions CI 45186664368](https://github.com/71233/dg-python-scripts/actions/runs/45186664368)
+passed **379/379 Public unit tests** and wheel build on Ubuntu
+24.04 / Python 3.11.
 
 ## v2 security review — deployment identity bound (read-only)
 
