@@ -71,8 +71,7 @@ message = json.dumps(
 ).encode("ascii")
 expected_mac = hmac.new(
     trusted_key,
-    b"DGpy Hook Anchor HMAC-SHA256 v1
-" + message,
+    b"DGpy Hook Anchor HMAC-SHA256 v1\n" + message,
     hashlib.sha256,
 ).hexdigest()
 ```
