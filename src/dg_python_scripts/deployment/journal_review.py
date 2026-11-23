@@ -71,11 +71,11 @@ class JournalReview:
 
 
 def _valid_sha256(value: object) -> bool:
-    return isinstance(value, str) and _SHA256.fullmatch(value) is not None
+    return type(value) is str and _SHA256.fullmatch(value) is not None
 
 
 def _valid_tx_id(value: object) -> bool:
-    return isinstance(value, str) and _TRANSACTION_ID.fullmatch(value) is not None
+    return type(value) is str and _TRANSACTION_ID.fullmatch(value) is not None
 
 
 def _digest(event: JournalEvent) -> str:
@@ -106,7 +106,7 @@ def assess_journal_preview(
     def blocked(code: str) -> JournalReview:
         return JournalReview((Finding(code),))
 
-    if not isinstance(evidence, JournalReviewEvidence):
+    if type(evidence) is not JournalReviewEvidence:
         return blocked("invalid_journal_evidence")
     if evidence.independent_tip_verified is not True:
         return blocked("trusted_tip_unconfirmed")
@@ -129,7 +129,7 @@ def assess_journal_preview(
     previous = _GENESIS_SHA256
     last_state: str | None = None
     for i, event in enumerate(tuple(events)):
-        if not isinstance(event, JournalEvent):
+        if type(event) is not JournalEvent:
             return blocked("invalid_journal_event")
         if type(event.sequence) is not int or event.sequence != i:
             return blocked("journal_sequence_mismatch")
