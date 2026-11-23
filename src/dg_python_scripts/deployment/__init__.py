@@ -12,6 +12,12 @@ from .anchor_review import (
     AnchorReviewEvidence,
     assess_hmac_journal_preview,
 )
+from .custody_review import (
+    CustodyReviewEvidence,
+    KeyCustodySnapshot,
+    RecoveryPreview,
+    assess_recovery_preview,
+)
 from .lifecycle import (
     DisableReview,
     DisableReviewEvidence,
@@ -38,4 +44,8 @@ __all__ = (
     "JournalAnchor",
     "AnchorReviewEvidence",
     "assess_hmac_journal_preview",
+    "CustodyReviewEvidence",
+    "KeyCustodySnapshot",
+    "RecoveryPreview",
+    "assess_recovery_preview",
 )
