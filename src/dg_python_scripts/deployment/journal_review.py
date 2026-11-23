@@ -79,7 +79,7 @@ def _valid_tx_id(value: object) -> bool:
 
 
 def _digest(event: JournalEvent) -> str:
-    """Domain-separated, deterministic digest of the six public event fields.
+    """Domain-separated, deterministic digest of the five hash-input event fields.
 
     The digest itself is excluded from the digest input. Never confuse this
     unkeyed hash with a signature or MAC, or trust a tip from the same journal.
