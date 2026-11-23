@@ -1,5 +1,26 @@
 # Flame 2026.2.3 — single-Bootstrap lifecycle design (NO APPLY)
 
+## HMAC-anchored journal preview — no key custody or production authorization
+
+Public Core now has an isolated-only
+[`assess_hmac_journal_preview()`](2026_HOOK_HMAC_ANCHOR_REVIEW.md)
+that checks an *externally keyed* HMAC-SHA256 anchor before invoking
+the existing in-memory SHA-256 chain review. The HMAC binds the
+transaction identity, scope, Flame 2026.2.3, expected ACTIVE/DISABLED
+revision and event count to the journal tip. Invalid key, MAC, identity,
+revision or external attestation causes **BLOCKED**.
+
+**This is not an authenticated journal service.** The key and approved
+anchor must come from separately protected, independently established
+sources; key custody, rotation, revocation and a trusted anti-replay
+revision counter have not been implemented. A signer whose key is
+compromised can fabricate coherent records. No signing, anchor storage,
+journal parser, writer, installer, managed link removal or restoration
+API has been added. `PREVIEW_ONLY` remains non-actionable.
+
+The user has only a production Flame Mac; independent G3 isolation has
+not been established. **No production Hook/profile/permission changes.**
+
 **Status: design and preview-only verification.** This document does not
 authorize a Flame Hook installation or disable operation. The implemented
 read-only functions are [`assess_bootstrap()`](2026_HOOK_PREFLIGHT.md)
