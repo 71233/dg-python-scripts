@@ -85,6 +85,22 @@ class PreflightTests(unittest.TestCase):
         self.assertEqual(self.report().status, "PREVIEW_ONLY")
         self.assertEqual(self.report().inspected_roots, 3)
 
+    def test_missing_non_target_application_directory_blocks(self):
+        self.dirs["application"].rmdir()
+        self.assertIn("unexpected_non_target_root_missing", self.codes())
+
+    def test_missing_non_target_shared_directory_blocks(self):
+        self.dirs["shared"].rmdir()
+        self.assertIn("unexpected_non_target_root_missing", self.codes())
+
+    def test_missing_extra_directory_blocks(self):
+        roots = (*self.roots, HookRoot("extra", self.base / "missing-extra"))
+        self.assertIn("unexpected_non_target_root_missing", self.codes(roots=roots))
+
+    def test_missing_non_target_user_directory_is_allowed(self):
+        self.dirs["user"].rmdir()
+        self.assertEqual(self.report(target_scope="shared").status, "PREVIEW_ONLY")
+
     def test_missing_target_directory_blocks_without_creating(self):
         self.dirs["user"].rmdir()
         self.assertIn("target_root_missing", self.codes())
@@ -140,6 +156,24 @@ class PreflightTests(unittest.TestCase):
         )
         self.assertIn("duplicate_root_path", self.codes(roots=roots))
         self.assertIn("duplicate_root_identity", self.codes(roots=roots))
+
+    def test_nested_extra_root_blocks(self):
+        child = self.dirs["application"] / "nested-extra"
+        child.mkdir()
+        roots = (*self.roots, HookRoot("extra", child))
+        self.assertIn("overlapping_hook_roots", self.codes(roots=roots))
+
+    def test_nested_root_blocks_regardless_of_order(self):
+        child = self.dirs["application"] / "nested-extra"
+        child.mkdir()
+        roots = (HookRoot("extra", child), *self.roots)
+        self.assertIn("overlapping_hook_roots", self.codes(roots=roots))
+
+    def test_hardlinked_bootstrap_alias_blocks(self):
+        # A spelling that doesn't contain 'dgpy' is easy to overlook.
+        alias = self.dirs["application"] / "custom_actions.py"
+        os.link(self.source, alias)
+        self.assertIn("bootstrap_hardlink_alias_present", self.codes())
 
     def test_root_symlink_blocks_even_to_existing_directory(self):
         link = self.base / "linked"
@@ -201,6 +235,25 @@ class PreflightTests(unittest.TestCase):
         self.assertIn("root_not_directory", self.codes(roots=roots))
         with patch("dg_python_scripts.deployment.preflight.os.scandir", side_effect=PermissionError):
             self.assertIn("root_inspection_failed", self.codes())
+
+    def test_disappearing_root_mid_scan_blocks(self):
+        # After lstat saw a root, scan failure is a race, not a missing
+        # optional directory that may be safely ignored.
+        with patch("dg_python_scripts.deployment.preflight.os.scandir", side_effect=FileNotFoundError):
+            self.assertIn("root_changed_during_scan", self.codes())
+
+    def test_hook_entry_stat_failure_blocks(self):
+        candidate = self.dirs["application"] / "custom_actions.py"
+        candidate.write_text("# app\n")
+        original_lstat = Path.lstat
+
+        def lstat_with_failure(path, *args, **kwargs):
+            if path == candidate:
+                raise FileNotFoundError("file changed mid scan")
+            return original_lstat(path, *args, **kwargs)
+
+        with patch("dg_python_scripts.deployment.preflight.Path.lstat", lstat_with_failure):
+            self.assertIn("hook_entry_stat_failed", self.codes())
 
     def test_result_never_contains_private_file_paths(self):
         (self.dirs["shared"] / "dgpy_private_organizer.py").write_text("# private\n")
