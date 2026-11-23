@@ -1,5 +1,21 @@
 # Flame 2026.2.3 Hook deployment preflight (experimental)
 
+## Effective Hook roots and deployment ID binding (NO APPLY)
+
+The separate [effective Hook context review](2026_HOOK_CONTEXT_BINDING.md)
+`assess_hook_context_preview()` compares two **in-memory** ordered root
+snapshots, source revision/digest, selected Bootstrap destination and an
+independently expected `deployment_id`. It BLOCKS missing or overlapping
+roots, changed dev/inode/owner/mode, different root order, source mismatch,
+and unknown `sysconfig.cfg` / Shared network failover state.
+
+**This does not discover the actual loader roots**: all snapshots and
+`True` evidence flags are externally supplied claims. A matched pair
+of fabricated records is not authentication, and the preview is not
+wired into v2 to authorize anything. The new module has no filesystem
+reads or writes. **39 fixture tests** passed under isolated Python
+3.13.5; GitHub full-suite CI is tracked separately.
+
 ## v2 security review — deployment identity bound (read-only)
 
 The [experimental v2 anchor preview](2026_HOOK_ANCHOR_V2_PREVIEW.md)
