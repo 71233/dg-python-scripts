@@ -15,10 +15,11 @@ HMAC is **not authorization to unlink/install/restore**.
 The isolated Python 3.13.5 deployment subset now passes **168/168**
 tests (existing 38 preflight + 42 managed-link + 43 journal + **45 HMAC**
 fixtures). Python 3.11 grammar parsing succeeded for the new modules
-and tests. Earlier full-suite CI with 169 tests predated these 45 cases;
-the **current PR-head CI** must be reviewed separately before
-claiming updated full-suite success. macOS Flame 2026.2.3 Python
-3.11.5 and real Hook behaviour remain unverified.
+and tests. The new [GitHub Actions CI run 45163143326](https://github.com/71233/dg-python-scripts/actions/runs/45163143326)
+**passed** on Ubuntu 24.04 / Python 3.11: editable package install,
+**214/214 unittest cases** (including the 45 new HMAC fixtures), and
+a successful wheel build. This does **not** verify the exact macOS
+Flame 2026.2.3 Python 3.11.5 or real Hook/UI/Selection behaviour.
 
 This is a **read-only, fail-closed assessment** for planning DGpy's single
 `dgpy_bootstrap.py` placement. It is **not an installer**, repair utility,
