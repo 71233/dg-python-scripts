@@ -14,8 +14,10 @@ Ten additional disposable fixture cases cover missing IDs, mismatches,
 a changed context without a new MAC and identity substitution.
 Python 3.13.5: v2 **73/73**; combined available
 preflight/journal/lifecycle/v2 **196/196**.
-The earlier 330-test GitHub CI predates these changes; verify
-the latest PR-head CI separately. Production Hook placement remains NO-GO.
+[GitHub Actions CI 45176255751](https://github.com/71233/dg-python-scripts/actions/runs/45176255751)
+passed the **340-case** Public suite, editable install and wheel
+build on Ubuntu 24.04 / Python 3.11. Production Hook placement
+remains **NO-GO**.
 
 ## Read-only generation-bound HMAC v2 (no automatic fallback)
 
