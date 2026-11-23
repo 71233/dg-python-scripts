@@ -1,5 +1,18 @@
 # Flame 2026.2.3 — generation-bound v2 anchor preview (NO APPLY)
 
+## Root inventory comparison is separate from v2 HMAC
+
+The [Hook context binding prototype](2026_HOOK_CONTEXT_BINDING.md)
+compares a separately supplied `deployment_id` and complete
+**ordered** effective root metadata snapshots including selected Hook
+destination and source digest/revision. The v2 HMAC continues to bind
+the opaque deployment ID only; it does **not** sign the entire
+filesystem inventory, and the two reviewers are **not automatically
+chained**. Neither module authenticates an identity issuer, the
+effective live Flame loader paths, symlink resolution, ACLs, network
+failover or the actual source installation. A consistency match is
+`NO_CHANGE`, never a G3/G4 release approval.
+
 **Status: experimental and non-operational.** This is a read-only, pure-Python
 cryptographic *consistency model*, not a production credential store, Hook
 installer, rotation service, or recovery tool. It does not import `flame`,
