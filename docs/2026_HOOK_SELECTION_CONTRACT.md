@@ -80,6 +80,18 @@ and a successful wheel build. The exact Flame-shipped **Python 3.11.5
 on macOS** and real 2026 Hook/Selection behavior remain **unverified**.
 This Linux CI is a package regression test, not a G3 host validation.
 
+## G2 review of existing built-in Action-specific policies
+
+The separate [Rename / Delete Markers / About Selection profile review](2026_BUILTIN_SELECTION_PROFILES.md)
+adds a **host-free advisory** table for the three existing Public built-in
+Actions, using this module's `inspect_hook_selection()` and the
+current Action registration contexts. It does not wire an adapter, change
+`SelectionBroker`, read Flame object properties or grant execution.
+Delete Markers uses only untrusted class-name hints; Rename requires a
+separate capability assessment. The 32 new test methods include a
+full-repository ActionRegistry drift check; local lightweight fixtures
+could not run that specific check, which is instead covered by Public CI.
+
 ## Gates and next step
 
 - **Do not** switch `hooks.py`, the bootstrap, built-in menus, or the
