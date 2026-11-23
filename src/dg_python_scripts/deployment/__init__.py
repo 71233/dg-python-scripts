@@ -25,6 +25,13 @@ from .anchor_v2_review import (
     V2Review,
     assess_v2_anchor_preview,
 )
+from .hook_context_review import (
+    RootSnapshot,
+    HookContextRecord,
+    HookContextEvidence,
+    HookContextReview,
+    assess_hook_context_preview,
+)
 from .lifecycle import (
     DisableReview,
     DisableReviewEvidence,
@@ -60,4 +67,9 @@ __all__ = (
     "V2Evidence",
     "V2Review",
     "assess_v2_anchor_preview",
+    "RootSnapshot",
+    "HookContextRecord",
+    "HookContextEvidence",
+    "HookContextReview",
+    "assess_hook_context_preview",
 )
