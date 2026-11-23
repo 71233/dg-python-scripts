@@ -98,13 +98,13 @@ hard-linked Bootstrap aliases, disappearing directories and failed entry
 stat checks. All **38 isolated fixture tests** passed on Python 3.13.5,
 and the changed code and tests parsed under Python 3.11 grammar.
 
-Before this review, GitHub Actions
-[CI run 45154894764](https://github.com/71233/dg-python-scripts/actions/runs/45154894764)
-passed the **75-case Public suite** and wheel build on Ubuntu 24.04 /
-Python 3.11. The updated **38-test** preflight code needs a fresh CI
-confirmation on this PR head; earlier CI does not verify these changes.
-Neither result verifies the exact Flame-shipped Python 3.11.5 runtime on
-macOS or actual Flame Hook imports or menu behavior.
+GitHub Actions
+[CI run 45156440211](https://github.com/71233/dg-python-scripts/actions/runs/45156440211)
+**passed** on Ubuntu 24.04 / Python 3.11 with an editable install,
+**84/84 unittest cases** (38 preflight fixtures including nine new regression
+tests, plus the existing Public tests) and a successful wheel build.
+This verifies the reviewed code on Linux Python 3.11, **not** the exact
+Flame-shipped Python 3.11.5 on macOS or real Flame Hook/menu behavior.
 Do not present these unit tests as Flame 2026 integration testing.
 
 See also [single-Bootstrap installation, disable and recovery design
