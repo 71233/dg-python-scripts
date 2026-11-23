@@ -18,6 +18,13 @@ from .custody_review import (
     RecoveryPreview,
     assess_recovery_preview,
 )
+from .anchor_v2_review import (
+    V2Anchor,
+    V2KeyState,
+    V2Evidence,
+    V2Review,
+    assess_v2_anchor_preview,
+)
 from .lifecycle import (
     DisableReview,
     DisableReviewEvidence,
@@ -48,4 +55,9 @@ __all__ = (
     "KeyCustodySnapshot",
     "RecoveryPreview",
     "assess_recovery_preview",
+    "V2Anchor",
+    "V2KeyState",
+    "V2Evidence",
+    "V2Review",
+    "assess_v2_anchor_preview",
 )
