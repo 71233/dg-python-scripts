@@ -1,5 +1,19 @@
 # Flame 2026.2.3 — single-Bootstrap lifecycle design (NO APPLY)
 
+## Experimental generation-bound v2 HMAC (no key service)
+
+An [opt-in v2 HMAC preview](2026_HOOK_ANCHOR_V2_PREVIEW.md)
+binds key generation, transaction identity, scope, revision and tip to
+the HMAC and rejects an anchor labelled v1. This is intentionally
+separate from the current v1 custody preview, which still rejects
+generation 2+.
+
+A protected, independently attested key generation authority and
+monotonic latest revision/tip provider are **not implemented**.
+The v2 records and their `True` evidence flags alone are **not
+trustworthy authority**. Preview success remains `NO_CHANGE`; there
+is no Hook install, unlink, restore or Profile operation.
+
 ## Custody and manual-reconciliation gate (read-only proposal)
 
 The new [key custody and recovery preview](2026_KEY_CUSTODY_RECOVERY_PREVIEW.md)
