@@ -102,9 +102,10 @@ in the structured findings.
 On disposable Python 3.13.5, **63/63** v2 tests passed. Including the
 existing matching-source preflight, journal and lifecycle tests,
 **186/186** relevant local tests passed. New files parse under Python 3.11
-grammar. A separate **current-PR-head GitHub Actions Python 3.11 full
-suite run is required** to establish compatibility with the existing
-Public package. Neither local tests nor Linux CI establish runtime
+grammar. [GitHub Actions CI run 45174550652](https://github.com/71233/dg-python-scripts/actions/runs/45174550652)
+**passed** on Ubuntu 24.04 / Python 3.11 with **330/330 Public
+unittest cases** (including the 63 v2 fixtures), editable installation
+and wheel build. Neither local tests nor Linux CI establish runtime
 compatibility with Flame's exact bundled Python 3.11.5 on macOS.
 
 See [2026 Hook preflight](2026_HOOK_PREFLIGHT.md) and
