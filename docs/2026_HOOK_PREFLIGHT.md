@@ -147,9 +147,11 @@ The added `tests/test_deployment_journal.py` contains **43 in-memory
 regression tests**, including four hostile subclass input cases;
 together with 38 preflight and 42 disable-preview tests,
 the isolated Python 3.13.5 subset passed **123/123**. The new code parsed
-with Python 3.11 grammar. The previous 126-test CI run above did **not**
-include these new files. Confirm the latest PR-head Python 3.11 CI
-separately before claiming an updated full-suite result.
+with Python 3.11 grammar. The new [GitHub Actions CI run 45161220740](https://github.com/71233/dg-python-scripts/actions/runs/45161220740)
+**passed** on Ubuntu 24.04 / Python 3.11 with editable install,
+**169/169 unittest cases** (43 journal + 42 lifecycle + 38 preflight +
+46 other Public tests), and a successful wheel build. This is **not**
+Flame 2026.2.3's exact Python 3.11.5 on macOS or a runtime Hook test.
 
 Next stages, each requiring separate evidence:
 
