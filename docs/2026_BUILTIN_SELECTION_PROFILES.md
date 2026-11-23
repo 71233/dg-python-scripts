@@ -36,7 +36,7 @@ Each phase is therefore reviewed independently; no menu predicate snapshot is co
 
 In a disposable Python **3.13.5** container, **32** new test methods were run, alongside the existing **25** Selection contract tests. The local lightweight fixture tree did not contain the full preexisting Action Registry, so the one test that imports and compares real registrations was **skipped there**; the local report was **57 tests, 1 skip, 0 failures**. Both new Python files parse under the Python **3.11 grammar**.
 
-The full Public GitHub Actions Python 3.11 CI **must be checked on the final PR head**. This includes the registered-Action consistency test, the existing 46 Public tests and all 25 previous Selection contract cases. Do **not** claim successful host/API validation from Linux CI.
+[GitHub Actions CI run 45194804878](https://github.com/71233/dg-python-scripts/actions/runs/45194804878) **passed** on Ubuntu 24.04 / Python 3.11 with **103/103 Public unittest cases** (46 existing + 25 callback-contract + 32 new built-in policy tests), editable package install and wheel build. This run included the real ActionRegistry registration-consistency test and reported **no skips**. Do **not** claim macOS Flame runtime, actual callback behavior, host object capability or destructive-operation safety from Linux CI.
 
 ## Remaining gates
 
