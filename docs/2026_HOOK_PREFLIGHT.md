@@ -131,6 +131,25 @@ This CI does **not** validate the exact macOS Flame 2026.2.3 bundled
 Python 3.11.5, real Hook loading, UI/Selection, or Profile restoration.
 A production Mac is **not** used as a test fixture.
 
+### Proposed in-memory journal consistency preview
+
+A separate pure-Python [journal review](2026_HOOK_JOURNAL_REVIEW.md)
+validates an at-most-five-event proposed v1 sequence, deterministic
+SHA-256 chain, and a separately supplied expected tip. It requires explicit
+external attestation of independent tip verification and **isolated**
+environment; missing evidence BLOCKS without touching events. It has no
+journal disk I/O, install/disable/restore actions, or private data output.
+A complete chain is only `PREVIEW_ONLY`; incomplete transactions, missing
+steps and hash mismatches all BLOCK. **SHA-256 is not a signature**: a chain
+is not authenticated if an attacker can replace its trusted tip too.
+
+The added `tests/test_deployment_journal.py` contains **39 in-memory
+regression tests**; together with 38 preflight and 42 disable-preview tests,
+the isolated Python 3.13.5 subset passed **119/119**. The new code parsed
+with Python 3.11 grammar. The previous 126-test CI run above did **not**
+include these new files. Confirm the latest PR-head Python 3.11 CI
+separately before claiming an updated full-suite result.
+
 Next stages, each requiring separate evidence:
 
 1. Review correctness and compatibility with the Public existing tests/CI,
