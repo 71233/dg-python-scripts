@@ -19,6 +19,8 @@ BOOTSTRAP_NAME = "dgpy_bootstrap.py"
 VALIDATED_FLAME_VERSION = "2026.2.3"
 STANDARD_SCOPES = frozenset({"user", "project", "application", "shared"})
 INSTALL_TARGET_SCOPES = frozenset({"user", "shared"})
+# A non-target User or Project Hook root may legitimately not exist yet.
+_OPTIONAL_MISSING_SCOPES = frozenset({"user", "project"})
 _DGPY_PREFIXES = ("dgpy", "dg_python_scripts")
 
 
@@ -150,7 +152,15 @@ def assess_bootstrap(
     for scope in sorted(STANDARD_SCOPES - standard_seen):
         stop("missing_scope", scope)
 
+    # Overlapping search roots can cause the same code to be visited twice,
+    # even when no direct basename collision is present today.
+    for index, (scope, path) in enumerate(known_paths):
+        for _, previous in known_paths[:index]:
+            if path != previous and (_within(path, previous) or _within(previous, path)):
+                stop("overlapping_hook_roots", scope)
+
     clean_source = _validated_path(source)
+    source_identity: tuple[int, int] | None = None
     if clean_source is None:
         stop("invalid_source_path")
     else:
@@ -163,6 +173,8 @@ def assess_bootstrap(
                 s = clean_source.lstat()
                 if not stat.S_ISREG(s.st_mode):
                     stop("source_not_regular_file")
+                else:
+                    source_identity = (s.st_dev, s.st_ino)
                 if s.st_mode & stat.S_IWOTH:
                     stop("source_world_writable")
                 if not os.access(clean_source, os.R_OK):
@@ -183,11 +195,13 @@ def assess_bootstrap(
         if path in seen_paths:
             stop("duplicate_root_path", scope)
         seen_paths.add(path)
+        path_was_present = False
         try:
             if _has_symlink_component(path):
                 stop("root_path_contains_symlink", scope)
                 continue
             st = path.lstat()
+            path_was_present = True
             if not stat.S_ISDIR(st.st_mode):
                 stop("root_not_directory", scope)
                 continue
@@ -213,9 +227,24 @@ def assess_bootstrap(
                 if folded_name in hook_names_seen:
                     stop("duplicate_hook_basename", scope)
                 hook_names_seen.add(folded_name)
+                # A hard link may disguise the DGpy bootstrap under a
+                # different filename. Compare identity, never file content.
+                if source_identity is not None:
+                    candidate = path / name
+                    try:
+                        candidate_stat = candidate.lstat()
+                    except OSError:
+                        stop("hook_entry_stat_failed", scope)
+                    else:
+                        if (candidate_stat.st_dev, candidate_stat.st_ino) == source_identity:
+                            stop("bootstrap_hardlink_alias_present", scope)
         except FileNotFoundError:
-            if scope == target_scope:
+            if path_was_present:
+                stop("root_changed_during_scan", scope)
+            elif scope == target_scope:
                 stop("target_root_missing", scope)
+            elif scope not in _OPTIONAL_MISSING_SCOPES:
+                stop("unexpected_non_target_root_missing", scope)
         except OSError:
             stop("root_inspection_failed", scope)
 
