@@ -73,9 +73,12 @@ execute argument independence, non-mutation, no Flame/Qt import, and
 redaction. All 25 passed with Python **3.13.5** in a disposable
 container. Both new Python files parse with Python **3.11 grammar**.
 
-**Full GitHub Actions Python 3.11 CI and exact Flame-shipped 3.11.5/macOS
-runtime are distinct validation steps.** The Public CI result must be
-recorded against the final PR head before claiming success.
+[GitHub Actions run 45189586026](https://github.com/71233/dg-python-scripts/actions/runs/45189586026)
+**passed** on Ubuntu 24.04 / Python 3.11, including **71/71 Public
+unittest cases** (25 new + 46 existing), editable package installation
+and a successful wheel build. The exact Flame-shipped **Python 3.11.5
+on macOS** and real 2026 Hook/Selection behavior remain **unverified**.
+This Linux CI is a package regression test, not a G3 host validation.
 
 ## Gates and next step
 
