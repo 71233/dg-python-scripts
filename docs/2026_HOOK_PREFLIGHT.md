@@ -143,9 +143,10 @@ A complete chain is only `PREVIEW_ONLY`; incomplete transactions, missing
 steps and hash mismatches all BLOCK. **SHA-256 is not a signature**: a chain
 is not authenticated if an attacker can replace its trusted tip too.
 
-The added `tests/test_deployment_journal.py` contains **39 in-memory
-regression tests**; together with 38 preflight and 42 disable-preview tests,
-the isolated Python 3.13.5 subset passed **119/119**. The new code parsed
+The added `tests/test_deployment_journal.py` contains **43 in-memory
+regression tests**, including four hostile subclass input cases;
+together with 38 preflight and 42 disable-preview tests,
+the isolated Python 3.13.5 subset passed **123/123**. The new code parsed
 with Python 3.11 grammar. The previous 126-test CI run above did **not**
 include these new files. Confirm the latest PR-head Python 3.11 CI
 separately before claiming an updated full-suite result.
