@@ -80,6 +80,36 @@ class JournalReviewTests(unittest.TestCase):
     def test_invalid_evidence_object_blocks(self):
         self.assert_blocked("invalid_journal_evidence", evidence={})
 
+    def test_custom_evidence_subclass_is_not_inspected(self):
+        class HostileEvidence(JournalReviewEvidence):
+            def __getattribute__(self, key):
+                raise AssertionError("Do not access untrusted subclass")
+        result = self.report(evidence=HostileEvidence())
+        self.assertEqual([x.code for x in result.findings], ["invalid_journal_evidence"])
+
+    def test_custom_event_subclass_is_not_inspected(self):
+        class HostileEvent(JournalEvent):
+            def __getattribute__(self, key):
+                raise AssertionError("Do not access untrusted subclass")
+        initial = self.events[0]
+        injected = HostileEvent(*(
+            initial.sequence, initial.transaction_id, initial.event_type,
+            initial.payload_sha256, initial.previous_sha256, initial.event_sha256,
+        ))
+        self.assert_blocked("invalid_journal_event", events=[injected, *self.events[1:]])
+
+    def test_digest_subclass_rejected(self):
+        class DigestSubclass(str):
+            pass
+        ev = replace(self.evidence, expected_tip_sha256=DigestSubclass(self.evidence.expected_tip_sha256))
+        self.assert_blocked("invalid_expected_tip_digest", evidence=ev)
+
+    def test_transaction_subclass_rejected(self):
+        class IdSubclass(str):
+            pass
+        ev = replace(self.evidence, expected_transaction_id=IdSubclass("test-transaction"))
+        self.assert_blocked("invalid_expected_transaction_id", evidence=ev)
+
     def test_no_event_access_when_evidence_untrusted(self):
         class ExplodingList(list):
             def __iter__(self):
