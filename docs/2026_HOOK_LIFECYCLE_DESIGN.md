@@ -1,5 +1,18 @@
 # Flame 2026.2.3 — single-Bootstrap lifecycle design (NO APPLY)
 
+## Root context-to-identity contract is comparison only
+
+A new [Hook context binding preview](2026_HOOK_CONTEXT_BINDING.md)
+checks that an in-memory independently supplied identity binding matches
+the current **claimed** Flame root inventory, target root and source
+revision, including all standard and additional search roots in order.
+A real observed-root provider and independently authenticated binding
+issuer do not exist. In particular, effective Shared `sysconfig.cfg`
+redirection and fallback during network failure must be established in
+an isolated Flame environment, rather than inferred from a fixed path.
+No `PREVIEW_ONLY` result is allowed to initiate installer, disable or
+restore actions.
+
 ## Per-deployment identity is not verified by a MAC alone
 
 The experimental v2 verifier now includes an opaque
