@@ -114,8 +114,12 @@ methods passed; the **86-test** combined selection-contract +
 built-in profiles + plan-audit subset finished with **85 passes
 and 1 skipped** ActionRegistry comparison, because the local fixture
 tree does not include full Public source. Both new files parse under
-Python 3.11 grammar. The full GitHub Python 3.11 CI against actual
-Public dataclasses and ActionRegistry **must be checked separately**.
+Python 3.11 grammar. [GitHub Actions CI 45197667828](https://github.com/71233/dg-python-scripts/actions/runs/45197667828)
+**passed** on Ubuntu 24.04 / Python **3.11**: **132/132 Public
+unittest cases** (29 new + 103 existing), editable package installation
+and wheel build all succeeded. No skipped tests were reported.
+This validates the current Public dataclasses and ActionRegistry
+integration in Linux CI, **not** the actual Flame 2026.2.3 host.
 
 **Do not** wire these reviews into `hooks.py`, existing
 `SelectionBroker`, menus, Rename UI or Marker deletion yet. Keep
