@@ -26,9 +26,11 @@ successful-looking result caused by an incomplete directory search.
 An operator must provide exactly one root for each standard scope (User,
 Project, Application, Shared) and a separate `scope="extra"` entry for each
 confirmed additional Hook directory. `path=None` means unknown, not absent.
-A known directory that does not exist (such as the current Project Hook root)
-is distinct from an unknown root. The selected **User or Shared** deployment
-target must already exist. The function never creates it.
+A known directory that does not exist is distinct from an unknown root.
+A **non-target** User directory (possibly not created before first launch)
+or Project directory may be absent. A missing target **User or Shared**,
+Application, non-target Shared, or explicitly supplied extra directory
+BLOCKS the assessment. The function never creates any directory.
 
 The `Evidence` flags are explicit **operator attestations**. By default all
 are unknown and the assessment is BLOCKED. They include a confirmed exact
@@ -43,16 +45,19 @@ any flag to True without real evidence invalidates the assessment.
   relative paths, path traversal, wrong target scope, or wrong Flame version.
 - Reject source missing, wrong filename, non-regular source, a symlink in the
   source or its ancestors, world-writable source, or source within a Hook root.
-- Reject a missing target Hook directory, non-directory roots, a symlink in
-  any supplied root path, unreadable roots, or duplicate root paths/inodes.
+- Reject a missing target or unexpected missing non-target Hook directory,
+  non-directory roots, a symlink in any supplied root path, unreadable roots,
+  duplicate root paths/inodes, **or overlapping ancestor/descendant roots**.
 - Reject **any world-writable inspected Hook root**, including one not used
   as the target. The observed 0777 User/Shared roots in the 2026.2.3
   environment will therefore BLOCK the plan; no `chmod` workaround is made.
 - Reject any `dgpy*`/`dg_python_scripts*` direct entry, including dangling
   symlinks; existing files are **never overwritten**, even if a symlink might
   point to the same source.
-- Reject direct `.py` symlinks and duplicate case-folded `.py` basenames among
-  supplied roots. This is conservative on potentially case-insensitive macOS
+- Reject direct `.py` symlinks, duplicate case-folded `.py` basenames among
+  supplied roots, **direct hard links to the selected Bootstrap source**,
+  and entry/root changes that make an in-progress scan inconsistent.
+  Filename folding is conservative on potentially case-insensitive macOS
   filesystems; it does not claim Flame's loader is case-insensitive.
 
 Findings contain only stable issue codes and standard scope identifiers, **no
@@ -63,9 +68,11 @@ static scanner did not find a blocker with the supplied and attested inputs.
 
 ## Deliberate exclusions
 
-This version does **not** verify real Hook loading, alternate filenames or
-dynamic imports, recursive subdirectories, hard links/alias content, actual
-Flame import paths, per-Project behavior beyond one explicitly supplied
+This version does **not** verify real Hook loading, arbitrary alternate
+filenames or dynamic imports, recursive subdirectories, content-identical
+copies with different inodes, hidden hard-link aliases outside supplied
+direct `.py` entries, actual Flame import paths, per-Project behavior
+beyond one explicitly supplied
 Project root, all system users, menu/UI registration, or the root priority
 order. It does not determine whether a machine's storage is physically local,
 or validate ACLs, network mounts, user ownership, and symlink races in depth.
@@ -85,18 +92,24 @@ Run in a disposable checkout/fixture environment, not by installing in Flame:
 PYTHONPATH=src python3 -B -m unittest discover -s tests -p 'test_deployment_preflight.py' -v
 ```
 
-The initial 29 disposable-directory tests cover the stop conditions,
-source conflicts, symlinks (including dangling links), world-writable
-roots, duplicate basenames, missing Project directories, and non-mutating
-behavior. They passed on Python 3.13.5 in an isolated container; the new
-source also parsed under Python 3.11 grammar.
+The initial 29 disposable-directory tests were extended with nine regression
+tests covering non-target missing directories, overlapping Hook roots,
+hard-linked Bootstrap aliases, disappearing directories and failed entry
+stat checks. All **38 isolated fixture tests** passed on Python 3.13.5,
+and the changed code and tests parsed under Python 3.11 grammar.
 
-GitHub Actions [CI run 45154560937](https://github.com/71233/dg-python-scripts/actions/runs/45154560937)
-on Public Draft PR #6 passed on Ubuntu 24.04 with Python 3.11, including
-editable package install, the **full Public unittest discover suite** and
-wheel build. This does **not** verify the exact Flame-shipped Python 3.11.5
-runtime on macOS, actual Flame Hook imports or menu behavior.
+Before this review, GitHub Actions
+[CI run 45154894764](https://github.com/71233/dg-python-scripts/actions/runs/45154894764)
+passed the **75-case Public suite** and wheel build on Ubuntu 24.04 /
+Python 3.11. The updated **38-test** preflight code needs a fresh CI
+confirmation on this PR head; earlier CI does not verify these changes.
+Neither result verifies the exact Flame-shipped Python 3.11.5 runtime on
+macOS or actual Flame Hook imports or menu behavior.
 Do not present these unit tests as Flame 2026 integration testing.
+
+See also [single-Bootstrap installation, disable and recovery design
+(NO APPLY)](2026_HOOK_LIFECYCLE_DESIGN.md). No state-changing operations
+have been implemented.
 
 Next stages, each requiring separate evidence:
 
