@@ -1,5 +1,21 @@
 # Flame 2026.2.3 Hook deployment preflight (experimental)
 
+## Custody-aware recovery preview (pure Python, NO APPLY)
+
+[Read-only key custody/recovery gating](2026_KEY_CUSTODY_RECOVERY_PREVIEW.md)
+is added as a companion to the HMAC anchor verifier. It checks the
+purported external revocation/retirement status and independently
+attested latest revision **before** invoking HMAC verification;
+generation 2+ is unsupported under anchor v1 and always BLOCKS.
+Interrupted or inconsistent histories require manual reconciliation
+without any file changes. Matching records only produce `NO_CHANGE`.
+
+The new tests comprise **44 mocked custody boundary checks** and
+**9 HMAC/journal integration fixtures**. The mocked cases passed
+locally on Python 3.13.5; integration and full Public results must be
+taken from the GitHub CI run for the actual PR head. The exact
+macOS Flame 2026.2.3 Python 3.11.5 runtime remains unverified.
+
 ## Latest isolated HMAC anchor review (NO APPLY)
 
 The new [HMAC anchor preview](2026_HOOK_HMAC_ANCHOR_REVIEW.md)
