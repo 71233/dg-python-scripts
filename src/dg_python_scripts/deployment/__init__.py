@@ -7,6 +7,11 @@ from .journal_review import (
     JournalReviewEvidence,
     assess_journal_preview,
 )
+from .anchor_review import (
+    JournalAnchor,
+    AnchorReviewEvidence,
+    assess_hmac_journal_preview,
+)
 from .lifecycle import (
     DisableReview,
     DisableReviewEvidence,
@@ -30,4 +35,7 @@ __all__ = (
     "JournalReview",
     "JournalReviewEvidence",
     "assess_journal_preview",
+    "JournalAnchor",
+    "AnchorReviewEvidence",
+    "assess_hmac_journal_preview",
 )
