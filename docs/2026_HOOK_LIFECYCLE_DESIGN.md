@@ -1,10 +1,11 @@
 # Flame 2026.2.3 — single-Bootstrap lifecycle design (NO APPLY)
 
-**Status: design only.** This document does not authorize a Flame Hook
-installation. It deliberately adds no command to create, replace, remove,
-reload, or modify files in Flame's Hook directories. The first executable
-component remains the read-only, fail-closed
-[`assess_bootstrap()`](2026_HOOK_PREFLIGHT.md) in Draft PR #6.
+**Status: design and preview-only verification.** This document does not
+authorize a Flame Hook installation or disable operation. The implemented
+read-only functions are [`assess_bootstrap()`](2026_HOOK_PREFLIGHT.md)
+and `assess_disable_preview()` (`src/dg_python_scripts/deployment/lifecycle.py`).
+Both return sanitized codes only. **Neither provides an apply, disable, restore,
+reload, chmod, symlink creation or removal command.**
 
 The scope is the sole Public `dgpy_bootstrap.py` entry point. Public Core
 package source, optional Internal extensions, per-user settings, and any
@@ -39,7 +40,10 @@ User profile root; check Flame's effective environment independently.
 
 ## 2. Gated states and allowed intentions
 
-The following are **future workflow states**, not implemented APIs:
+The following are **proposed lifecycle states**, not state-changing APIs:
+the read-only `assess_disable_preview()` checks only a recorded `ACTIVE`
+link in an independently confirmed **isolated environment**. It does not
+transition any state:
 
 | State | Meaning | Next action |
 | --- | --- | --- |
@@ -55,6 +59,37 @@ The following are **future workflow states**, not implemented APIs:
 `PREVIEW_ONLY` -> `ACTIVE` is **not** a legal transition. Implementation
 of state-changing operations requires separate design review and G3
 isolated validation. This PR contains **no state-changing transition**.
+
+### Implemented managed-link disable **preview** (read-only only)
+
+`assess_disable_preview(record=..., evidence=...)` takes a manually
+supplied `ManagedLinkRecord` with Flame 2026.2.3 version, chosen User/Shared
+scope, an `ACTIVE` transaction ID, the exact Hook root and Bootstrap
+destination, the absolute symlink target/source, recorded root/link/source
+(device, inode, owner UID) identities and the expected source SHA-256.
+It does **not** create, load, parse, authenticate or persist a journal.
+
+It first requires explicit operator attestations that (1) the journal has
+been independently authenticated, (2) every effective Hook root has been
+reviewed, (3) ownership/ACL/mount status has been separately reviewed and
+(4) this is an **isolated test environment**. Missing attestations return
+`BLOCKED` **without filesystem access**.
+
+When those conditions are independently confirmed, the preview compares
+the root identity/permissions, the recorded symlink's identity and raw
+target, the source identity, and a bounded SHA-256 of a regular source
+file. It rejects wrong versions/scopes, missing or replaced files,
+world-writable roots/sources, path aliases, changed targets, bad/missing
+records, invalid digests, source size over 1 MiB, and I/O failures.
+It reads no source content into the result and uses a no-follow,
+read-only file descriptor. Only sanitized finding codes and the selected
+standard scope are returned.
+
+`PREVIEW_ONLY` means **metadata matched this limited snapshot**, not that
+the transaction record is genuine, no other Hook exists, the snapshot is
+atomic, or a symlink could safely be unlinked. Tests create and mutate
+**only disposable fixture files**. The production callable has no
+`unlink`, `symlink_to`, `chmod`, `mkdir`, or any installation route.
 
 ## 3. Proposed prerequisites for any future installation
 
@@ -126,7 +161,8 @@ a speculative `rm`, reset, or forced checkout.
 
 - No atomic multi-root snapshot, deep/masked Hook inventory, dynamic
   import detection, actual duplicate menu resolution, OS ACL evaluator,
-  physical storage proof, safe transaction journal, or installer yet.
+  physical storage proof, authenticated journal parser/writer, or installer
+  yet. The new disable-preview data model is **not** a journal system.
 - Recheck root identity immediately before and immediately after any
   hypothetical operation; TOCTOU can still occur even with checks.
   Cross-machine Shared updates cannot be treated as one atomic operation.
