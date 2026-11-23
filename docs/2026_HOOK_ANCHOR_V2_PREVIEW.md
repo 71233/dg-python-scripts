@@ -20,8 +20,9 @@ The v1 HMAC anchor binds scope, key identity, transaction identity,
 event count, revision and journal tip, **but not key generation**.
 v1 therefore rejects key generation 2+.
 
-The v2 experimental HMAC explicitly includes `key_generation` in
-the authenticated bytes and uses a **distinct protocol and MAC domain**.
+The v2 experimental HMAC explicitly includes `key_generation` **and an
+opaque `deployment_id`** in the authenticated bytes and uses a
+**distinct protocol and MAC domain**.
 The review can test generations 1, 2 and later values only when the
 same generation is asserted by an *independently protected* source.
 A v1 anchor or v1 MAC must not be silently accepted by the v2 verifier.
@@ -35,8 +36,8 @@ old journals from disk or authenticate any preexisting real DGpy deployment.
 `V2Anchor` fields, in their canonical order:
 
 ```text
-protocol, flame_version, scope, transaction_id, key_id,
-key_generation, revision, event_count, terminal_state, tip_sha256
+protocol, flame_version, scope, deployment_id, transaction_id,
+key_id, key_generation, revision, event_count, terminal_state, tip_sha256
 ```
 
 The `mac_sha256` field is excluded from the input. Test fixtures
@@ -47,8 +48,9 @@ HMAC-SHA256 with a **public deterministic test-only** 32-byte fixture key.
 The production reviewer only **verifies** the MAC; it does not sign.
 
 `protocol` must be `DGpy-Hook-Anchor-v2`, `flame_version` exactly
-`2026.2.3`, scope `user` or `shared`, positive integral generation
-(1 through 2³¹−1). Existing simplified journal semantics permit only
+`2026.2.3`, scope `user` or `shared`, a validated ASCII
+`deployment_id` (1–64 characters, no raw paths), and positive integral
+generation (1 through 2³¹−1). Existing simplified journal semantics permit only
 `ACTIVE` (revision 1, 3 events) or `DISABLED` (revision 2, 5 events).
 The format is provisional, not an approved production wire protocol.
 
@@ -57,11 +59,13 @@ The format is provisional, not an approved production wire protocol.
 `assess_v2_anchor_preview()` first requires *separately established*
 attestations that the key origin, current revocation status, current
 checkpoint, anchor origin, and **isolated disposable environment** are
-all independently reviewed. It requires trusted expected scope, transaction
-ID, key ID, generation, revision **and tip digest**.
+all independently reviewed. It requires trusted expected scope,
+**deployment identity**, transaction ID, key ID, generation, revision
+**and tip digest**.
 
 It rejects unknown, retired or revoked key state; mismatched identity,
-generation, revision, tip; wrong protocol/version; invalid input types;
+generation, deployment identity, revision, tip; wrong protocol/version;
+invalid input types;
 old/modified MACs; inconsistent, incomplete or altered event chains.
 The v2 data classes are exact-type checked to reject hostile subclasses.
 It only inspects the event collection **after** all the metadata and HMAC
@@ -72,6 +76,43 @@ authorization**.
 
 No path, transaction ID, key, anchor MAC or private record is included
 in the structured findings.
+
+## Identity-binding review and independent authority requirements
+
+A code review found that scope alone (`user` or `shared`) did not
+distinguish two separate Hook deployments. The experimental v2
+**now also requires an independently established, opaque
+`deployment_id`** in `V2Anchor`, `V2KeyState`, and
+`V2Evidence.expected_deployment_id`, and includes it inside the HMAC.
+
+When the independent expected deployment ID, key state and signed anchor
+disagree, the result is `BLOCKED`. Replacing the ID in all three
+objects without recomputing the MAC also blocks. The same key ID and
+transaction ID on two *different* fixture deployment IDs produce
+distinct MACs. The v2 test suite includes ten new regression cases.
+
+**This is not an implementation of deployment identity issuance.**
+The caller must establish uniqueness and provenance independently, and
+must prove that an opaque ID refers to the correct effective
+machine, Flame User/profile, Hook root, destination and source revision.
+This reviewer cannot determine those facts, and a forged or reused
+independent ID can still make unrelated environments appear equivalent.
+Raw usernames, device names, filesystem paths and production records
+must not be embedded in IDs or committed to Public.
+
+The earlier *unreleased* experimental v2 canonical layout without
+`deployment_id` is intentionally **no longer accepted**. This Draft
+PR is not a stable persisted-record specification; before any release,
+the wire protocol/version must be reviewed, frozen and test-vector
+verified separately. Do not silently fall back to the older v2 layout.
+
+A deployable trust boundary would require **all three independent
+proofs**, not just boolean flags: (1) a well-defined issuer and
+protected lifecycle for key/deployment identities, (2) a separately
+authenticated, monotonic current generation/revision/tip checkpoint,
+and (3) evidence that those identities match the actual effective
+Flame Hook search roots and installed source. None currently exists.
+`PREVIEW_ONLY` is a *consistency result*, never a release gate.
 
 ## Trust limitations and non-goals
 
@@ -99,14 +140,18 @@ in the structured findings.
 
 ## Evidence
 
-On disposable Python 3.13.5, **63/63** v2 tests passed. Including the
-existing matching-source preflight, journal and lifecycle tests,
-**186/186** relevant local tests passed. New files parse under Python 3.11
-grammar. [GitHub Actions CI run 45174550652](https://github.com/71233/dg-python-scripts/actions/runs/45174550652)
-**passed** on Ubuntu 24.04 / Python 3.11 with **330/330 Public
-unittest cases** (including the 63 v2 fixtures), editable installation
-and wheel build. Neither local tests nor Linux CI establish runtime
-compatibility with Flame's exact bundled Python 3.11.5 on macOS.
+The baseline v2 fixture suite had 63 tests. The identity-binding review
+added ten new cases: **73/73** v2 tests passed on disposable Python
+3.13.5, and **196/196** of the corresponding locally available
+preflight/journal/lifecycle/v2 fixtures passed. The changed source
+and tests parse under Python 3.11 grammar.
+
+The previous [CI run 45174850123](https://github.com/71233/dg-python-scripts/actions/runs/45174850123)
+passed 330 Public tests on the **earlier** v2 layout. It does
+**not** validate the identity-binding changes. Confirm the
+current Draft PR head's full Python 3.11 CI separately before reporting
+that result. None of these tests establishes runtime compatibility
+with Flame's exact bundled Python 3.11.5 on macOS.
 
 See [2026 Hook preflight](2026_HOOK_PREFLIGHT.md) and
 [NO-APPLY lifecycle design](2026_HOOK_LIFECYCLE_DESIGN.md).
