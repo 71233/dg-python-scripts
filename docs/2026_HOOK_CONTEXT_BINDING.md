@@ -105,10 +105,13 @@ attestations, safe findings and fabricated self-consistent inputs.
 The new source parses on Python 3.11 grammar; the exact code/test
 blob SHAs match the isolated test artifacts.
 
-**The latest PR-head full Public Python 3.11 CI must be verified
-separately.** This is not a macOS Flame runtime test. The only
-available Flame 2026.2.3 Mac is used for production; no approved
-isolated Flame host is available.
+[GitHub Actions CI run 45186664368](https://github.com/71233/dg-python-scripts/actions/runs/45186664368)
+**passed** on Ubuntu 24.04 / Python **3.11**: **379/379 Public
+unittest cases** (including all 39 new Hook context tests), editable
+package installation and wheel build. This is **not** the exact
+Flame-bundled Python 3.11.5 on macOS or a live Hook loader test.
+The only available Flame 2026.2.3 Mac is used for production;
+no approved isolated Flame host is available.
 
 **NO-GO:** Production Hook write/rename/delete, symlink creation,
 chmod/chown, restart/reload, Flame Setup Profile Reset/Import,
