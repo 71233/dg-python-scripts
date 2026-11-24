@@ -15,6 +15,57 @@ also includes **separate, narrowly scoped fixes to the existing**
 `rename.py` and `markers.py` apply paths, verified only with synthetic
 failure injection and Linux CI; it has not been merged or deployed.
 
+## 2026-11-24 — staged recheck and fail-fast Marker deletion (Draft-only)
+
+**Motivation:** The original all-target validation stops stale previews
+before any delete, but after the first callback it can no longer
+guarantee later targets remain unchanged. The earlier implementation
+also continued to issue delete calls for the rest of the captured
+markers when a callback raised, even if the callback had partly
+mutated its target.
+
+A further **unmerged, synthetic-tested** change to
+`src/dg_python_scripts/markers.py` keeps the all-target precheck
+and adds two narrower stop rules:
+
+1. **Before each target with captured markers**, re-read that target's
+   marker collection and compare the ordered proxy identities with the
+   captured snapshot. If a previous target's callback changed this
+   later target, or it can no longer be read, raise
+   `MarkerApplyError` and **do not delete markers from that target
+   or any subsequent one**. This error is **not**
+   `StaleMarkerDeleteError`: some earlier targets may already have
+   been mutated.
+2. **On the first delete callback exception**, stop immediately,
+   perform a best-effort read-back of the current target to estimate
+   the net removed count, and raise `MarkerApplyError`. Do **not**
+   continue calling delete on subsequent captured markers or targets.
+   Post-target read-back failure or markers remaining likewise stops
+   further callbacks.
+
+Five further synthetic cases exercise mutation/unreadability of a
+later target, rejection before or after a marker was removed,
+and re-created Python proxy objects. The existing tests now require
+**fail-fast** behavior rather than accepting calls on later targets
+after the first callback exception. These tests do not assert that
+deleted markers were restored: the first target can remain partially
+changed.
+
+**Important limitations:** A Python read is not an atomic lock.
+A host can change between a target's recheck and its next callback,
+or change the **same** target during a callback. The result's
+`deleted` remains a **best-effort net-length estimate**, not an
+authoritative count of successful calls. The code deliberately
+compares `is` identity rather than unverified marker properties:
+Flame might return fresh `PyMarker` proxies on each access, causing
+valid plans to fail closed. All such host semantics require a
+separately isolated Flame 2026.2.3 validation before any rollout.
+
+No new automatic retry, workaround using raw marker names/times,
+hypothetical host transaction, undo or repair operation was added.
+Neither `hooks.py` nor `SelectionBroker`, current menus, dialogs,
+Qt or production Hook paths was changed.
+
 ## 2026-11-24 — late mutation, callback errors and rollback-failure diagnostics
 
 A further isolated review of the **unmerged Draft** shows:
