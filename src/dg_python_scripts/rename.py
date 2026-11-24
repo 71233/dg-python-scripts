@@ -342,19 +342,31 @@ def apply_plan(plan: RenamePlan) -> RenameApplyResult:
             )
 
     nonce = f"{time.time_ns():x}"
-    temporary_rows: list[RenamePreviewRow] = []
+    # A setter can mutate a name and *then* raise, or its read-back can
+    # fail after a successful write. Record each attempted target *before*
+    # writing so the failing target is also considered for rollback.
+    attempted_rows: list[RenamePreviewRow] = []
 
     try:
         for index, row in enumerate(rows):
             target = row.target
             assert target is not None
+            attempted_rows.append(row)
             _write_exact(target, f"__DGPY_TMP_{nonce}_{index:04d}__")
-            temporary_rows.append(row)
     except RenameError as error:
         rollback_errors: list[str] = []
-        for row in reversed(temporary_rows):
+        for row in reversed(attempted_rows):
             target = row.target
             assert target is not None
+            try:
+                # Avoid an unnecessary setter call when the failed write
+                # left the original name unchanged.
+                if _read_name(target) == target.original_name:
+                    continue
+            except RenameError:
+                # Unknown state: best-effort restoration with verified
+                # read-back, not a claim of transactional host semantics.
+                pass
             try:
                 _write_exact(target, target.original_name)
             except RenameError as rollback_error:
