@@ -15,6 +15,68 @@ also includes **separate, narrowly scoped fixes to the existing**
 `rename.py` and `markers.py` apply paths, verified only with synthetic
 failure injection and Linux CI; it has not been merged or deployed.
 
+## 2026-11-24 — within-target Marker recheck (Draft only)
+
+**Further G2 failure injection:** The previous version rechecked each
+Clip/Sequence *before* processing its captured marker list, but
+performed subsequent callbacks on the **same target** without another
+snapshot check. A callback that silently removed a different marker,
+replaced or inserted a marker, or left the first marker unchanged
+could therefore still trigger a later delete with a stale reference.
+
+Six disposable regression cases were added to
+`tests/test_action_failure_injection_2026.py` (23 → **29**). On the
+original implementation,
+[GitHub CI 45305286334](https://github.com/71233/dg-python-scripts/actions/runs/45305286334)
+ran 161 tests and had **5 expected regression failures**:
+second callbacks were issued after same-target changes (or an
+unreadable collection), and a callback that removed both markers
+could even produce an apparent success. The healthy three-marker case
+passed. This was a **controlled red regression run**, not evidence of
+Flame 2026.2.3 behavior.
+
+**Draft-only fix:** The existing
+`markers.apply_delete_plan()` retains its all-target preflight and
+per-target recheck. Now, **before each *subsequent* marker callback
+on the same target**, it re-reads the current collection and compares
+its ordered Python object identities against the **unprocessed suffix**
+of the original captured snapshot. A changed or unreadable collection
+raises `MarkerApplyError` and **no further delete callback is made**.
+The first callback for each target is preceded by the existing
+per-target check. Healthy multiple-marker operations still follow
+their previous execution path.
+
+[GitHub CI 45305365570](https://github.com/71233/dg-python-scripts/actions/runs/45305365570)
+subsequently **passed 161/161 Public unittest cases** on Ubuntu 24.04
+/ Python **3.11**, including all six new cases, editable installation
+and wheel build. Tests use synthetic fake Clip/Marker objects, not
+the Flame runtime.
+
+**Limits and unresolved G3 checks:**
+
+- The first callback may already have deleted or changed markers
+  when a later check stops the plan. **No undo or restoration** is
+  performed or implied.
+- Another host operation could change a marker between the
+  re-read and the next delete callback. The new checks do **not**
+  make deletion atomic, protect against overlapping writes or
+  establish an official Flame transaction mechanism.
+- `PyMarker` object identity on repeated `PyClip.markers` reads is
+  **not documented here as stable**. The conservative identity
+  comparison can reject valid plans when proxies are re-created;
+  more reads make that a more prominent compatibility gate.
+  Do not replace identity with guessed names, positions or timestamps.
+- `MarkerApplyError.deleted` is a **best-effort net count estimate**.
+  A failed re-read may leave it at zero after a real deletion;
+  insertion/replacement can also make the value misleading. The
+  existing error dialog still uses that legacy field; treat it
+  as a diagnostic, **not verified deletion or successful recovery**.
+
+Actual Flame 2026.2.3 macOS/Python 3.11.5, Marker proxy lifetime,
+concurrent edits and undo/recovery remain **unverified**. Do not
+install or use this Draft on the only production Mac; G3/G4 remain
+NO-GO. No Hook/Menu/SelectionBroker/UI wiring was introduced.
+
 ## 2026-11-24 — staged recheck and fail-fast Marker deletion (Draft-only)
 
 **Motivation:** The original all-target validation stops stale previews
