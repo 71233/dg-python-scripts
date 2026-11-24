@@ -371,6 +371,97 @@ class MarkerStalePreviewTests(unittest.TestCase):
         self.assertEqual(first.markers, [b])
         self.assertEqual(second.markers, [c])
 
+    def test_same_target_replaced_next_marker_blocks_before_second_delete(self):
+        first, second, replacement = PyMarker(), PyMarker(), PyMarker()
+        clip = PyClip("Private", (first, second))
+        plan = build_delete_plan((clip,))
+        calls = []
+
+        def delete_with_replacement(marker):
+            calls.append(marker)
+            if marker is first:
+                clip.markers[:] = [replacement]
+
+        with self.assertRaises(MarkerApplyError) as cm:
+            apply_delete_plan(plan, delete_with_replacement)
+        self.assertNotIsInstance(cm.exception, StaleMarkerDeleteError)
+        self.assertEqual(calls, [first])
+        self.assertEqual(clip.markers, [replacement])
+        self.assertIn("during deletion", str(cm.exception))
+
+    def test_same_target_extra_marker_blocks_before_second_delete(self):
+        first, second, extra = PyMarker(), PyMarker(), PyMarker()
+        clip = PyClip("Private", (first, second))
+        plan = build_delete_plan((clip,))
+        calls = []
+
+        def delete_and_append(marker):
+            calls.append(marker)
+            clip.markers.remove(marker)
+            if marker is first:
+                clip.markers.append(extra)
+
+        with self.assertRaises(MarkerApplyError) as cm:
+            apply_delete_plan(plan, delete_and_append)
+        self.assertEqual(calls, [first])
+        self.assertEqual(clip.markers, [second, extra])
+        # Net length can be zero despite a previous successful deletion.
+        self.assertEqual(cm.exception.deleted, 0)
+
+    def test_same_target_noop_callback_stops_before_second_delete(self):
+        first, second = PyMarker(), PyMarker()
+        clip = PyClip("Private", (first, second))
+        plan = build_delete_plan((clip,))
+        calls = []
+        with self.assertRaises(MarkerApplyError) as cm:
+            apply_delete_plan(plan, lambda marker: calls.append(marker))
+        self.assertEqual(calls, [first])
+        self.assertEqual(clip.markers, [first, second])
+        self.assertEqual(cm.exception.deleted, 0)
+        self.assertIn("2 marker(s) remain", str(cm.exception))
+
+    def test_same_target_unreadable_after_first_callback_aborts(self):
+        first, second = PyMarker(), PyMarker()
+        sequence = PySequence("Private", (first, second))
+        plan = build_delete_plan((sequence,))
+        calls = []
+
+        def delete_then_deny(marker):
+            calls.append(marker)
+            sequence.markers.remove(marker)
+            sequence.deny_read = True
+
+        with self.assertRaises(MarkerApplyError):
+            apply_delete_plan(plan, delete_then_deny)
+        self.assertEqual(calls, [first])
+        self.assertEqual(vars(sequence)["markers"], [second])
+
+    def test_same_target_unexpected_extra_deletion_aborts_next_callback(self):
+        first, second = PyMarker(), PyMarker()
+        clip = PyClip("Private", (first, second))
+        plan = build_delete_plan((clip,))
+        calls = []
+
+        def delete_both_at_once(marker):
+            calls.append(marker)
+            clip.markers.clear()
+
+        with self.assertRaises(MarkerApplyError) as cm:
+            apply_delete_plan(plan, delete_both_at_once)
+        self.assertEqual(calls, [first])
+        self.assertEqual(clip.markers, [])
+        self.assertEqual(cm.exception.deleted, 2)
+
+    def test_same_target_normal_three_marker_deletion_still_succeeds(self):
+        markers = (PyMarker(), PyMarker(), PyMarker())
+        clip = PyClip("Private", markers)
+        plan = build_delete_plan((clip,))
+        delete, calls = recording_delete(clip)
+        result = apply_delete_plan(plan, delete)
+        self.assertEqual(calls, list(markers))
+        self.assertEqual((result.deleted, result.changed_targets), (3, 1))
+        self.assertEqual(clip.markers, [])
+
     def test_recreated_proxy_ref_preflight_stops_with_zero_callbacks(self):
         class PyClip:
             def __init__(self):
