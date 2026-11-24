@@ -270,8 +270,9 @@ class MarkerStalePreviewTests(unittest.TestCase):
 
         with self.assertRaises(MarkerApplyError) as cm:
             apply_delete_plan(plan, delete_with_error)
-        self.assertEqual(calls, [first_marker, second_marker])
-        self.assertEqual((first.markers, second.markers), ([], []))
+        self.assertEqual(calls, [first_marker])
+        self.assertEqual((first.markers, second.markers), ([], [second_marker]))
+        self.assertEqual(cm.exception.deleted, 1)
         self.assertIn("injected failure", str(cm.exception))
 
     def test_change_after_precheck_must_not_report_full_success(self):
@@ -288,9 +289,109 @@ class MarkerStalePreviewTests(unittest.TestCase):
 
         with self.assertRaises(MarkerApplyError):
             apply_delete_plan(plan, deletion_with_race)
+        self.assertEqual(calls, [first_marker])
+        self.assertEqual(first.markers, [])
+        self.assertEqual(len(second.markers), 2)
         self.assertTrue(any(item is new_marker for item in second.markers))
-        # The implementation may have deleted part of the original plan.
-        # Do not assert that partial deletion is acceptable or desired.
+        # The first marker has already been deleted: still a partial change.
+        # The new per-target guard limits further deletions; it is not atomic.
+
+    def test_late_second_target_change_stops_before_second_delete(self):
+        first, second, first_marker, second_marker, plan = deletion_fixture()
+        normal_delete, calls = recording_delete(first, second)
+        injected = PyMarker()
+
+        def delete_with_late_change(marker):
+            normal_delete(marker)
+            if marker is first_marker:
+                second.markers.append(injected)
+
+        with self.assertRaises(MarkerApplyError) as cm:
+            apply_delete_plan(plan, delete_with_late_change)
+        self.assertNotIsInstance(cm.exception, StaleMarkerDeleteError)
+        self.assertEqual(cm.exception.deleted, 1)
+        self.assertEqual(calls, [first_marker])
+        self.assertEqual(first.markers, [])
+        self.assertEqual(second.markers, [second_marker, injected])
+
+    def test_late_second_target_unreadable_stops_before_second_delete(self):
+        first_marker, second_marker = PyMarker(), PyMarker()
+        first = PyClip("First", (first_marker,))
+        second = PySequence("Second", (second_marker,))
+        plan = build_delete_plan((first, second))
+        self.assertEqual(len(plan.targets), 2)
+        normal_delete, calls = recording_delete(first, second)
+
+        def delete_then_deny(marker):
+            normal_delete(marker)
+            if marker is first_marker:
+                second.deny_read = True
+
+        with self.assertRaises(MarkerApplyError) as cm:
+            apply_delete_plan(plan, delete_then_deny)
+        self.assertEqual(cm.exception.deleted, 1)
+        self.assertEqual(calls, [first_marker])
+        self.assertEqual(first.markers, [])
+        self.assertEqual(vars(second)["markers"], [second_marker])
+
+    def test_callback_failure_before_removal_aborts_remaining_markers(self):
+        a, b, c = PyMarker(), PyMarker(), PyMarker()
+        first = PyClip("First", (a, b))
+        second = PyClip("Second", (c,))
+        plan = build_delete_plan((first, second))
+        called = []
+
+        def rejected_delete(marker):
+            called.append(marker)
+            raise RuntimeError("injected rejection before mutation")
+
+        with self.assertRaises(MarkerApplyError) as cm:
+            apply_delete_plan(plan, rejected_delete)
+        self.assertEqual(cm.exception.deleted, 0)
+        self.assertEqual(called, [a])
+        self.assertEqual(first.markers, [a, b])
+        self.assertEqual(second.markers, [c])
+
+    def test_callback_failure_after_removal_aborts_remaining_markers(self):
+        a, b, c = PyMarker(), PyMarker(), PyMarker()
+        first = PyClip("First", (a, b))
+        second = PyClip("Second", (c,))
+        plan = build_delete_plan((first, second))
+        called = []
+
+        def delete_then_raise(marker):
+            called.append(marker)
+            first.markers.remove(marker)
+            raise RuntimeError("injected mutation then exception")
+
+        with self.assertRaises(MarkerApplyError) as cm:
+            apply_delete_plan(plan, delete_then_raise)
+        self.assertEqual(cm.exception.deleted, 1)
+        self.assertEqual(called, [a])
+        self.assertEqual(first.markers, [b])
+        self.assertEqual(second.markers, [c])
+
+    def test_recreated_proxy_ref_preflight_stops_with_zero_callbacks(self):
+        class PyClip:
+            def __init__(self):
+                self.name = FakeName("Private")
+                self.reads = 0
+
+            @property
+            def markers(self):
+                self.reads += 1
+                # Deliberately create a new proxy on each read. This is
+                # NOT an assertion about Flame 2026 real proxy behavior.
+                return [PyMarker()]
+
+        clip = PyClip()
+        plan = build_delete_plan((clip,))
+        calls = []
+        with self.assertRaises(StaleMarkerDeleteError) as cm:
+            apply_delete_plan(plan, lambda marker: calls.append(marker))
+        self.assertEqual(cm.exception.deleted, 0)
+        self.assertEqual(calls, [])
+        self.assertGreaterEqual(clip.reads, 2)
 
     def test_ui_catches_stale_as_existing_marker_apply_error(self):
         clip = PyClip("Private clip", (PyMarker(),))
