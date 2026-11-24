@@ -115,6 +115,205 @@ class BrokerAuditTests(unittest.TestCase):
         self.assertEqual(received, [selection])
 
 
+class PredicateFailurePolicyTests(unittest.TestCase):
+    """G2 callback models; do not assume actual Flame callback ordering."""
+
+    def _assert_blocked(self, item, selection):
+        with self.assertRaisesRegex(RuntimeError, "predicate evaluation"):
+            item["execute"](selection)
+
+    def test_visibility_exception_blocks_both_snapshot_and_execute_fallback(self):
+        received = []
+        old = SimpleNamespace(selected=False)
+        failed = SimpleNamespace(selected=False)
+        current = SimpleNamespace(selected=True)
+
+        def visible(selection):
+            if selection[0] is failed:
+                raise ValueError("injected visibility failure")
+            return True
+
+        item = SelectionBroker().bind(
+            Action("visible", "Visible", received.append, is_visible=visible),
+            "media_panel",
+        )
+        self.assertTrue(item["isVisible"]((old,)))
+        with self.assertRaisesRegex(ValueError, "injected visibility failure"):
+            item["isVisible"]((failed,))
+        self._assert_blocked(item, (current,))
+        self._assert_blocked(item, (failed,))
+        self.assertEqual(received, [])
+
+    def test_enabled_exception_blocks_until_new_positive_predicate(self):
+        received = []
+        target = SimpleNamespace(selected=False)
+        current = SimpleNamespace(selected=True)
+        fail = True
+
+        def enabled(selection):
+            if fail:
+                raise RuntimeError("injected enabled failure")
+            return True
+
+        item = SelectionBroker().bind(
+            Action("enabled", "Enabled", received.append, is_enabled=enabled),
+            "media_panel",
+        )
+        with self.assertRaisesRegex(RuntimeError, "injected enabled failure"):
+            item["isEnabled"]((target,))
+        self._assert_blocked(item, (current,))
+        self._assert_blocked(item, (current,))
+        fail = False
+        self.assertTrue(item["isEnabled"]((target,)))
+        item["execute"]((current,))
+        item["execute"]((current,))
+        self.assertEqual(received, [(target,), (current,)])
+
+    def test_truth_conversion_exception_is_a_predicate_failure(self):
+        received = []
+
+        class BrokenResult:
+            def __bool__(self):
+                raise ValueError("injected result conversion failure")
+
+        item = SelectionBroker().bind(
+            Action("truth", "Truth", received.append,
+                   is_enabled=lambda selection: BrokenResult()),
+            "media_panel",
+        )
+        with self.assertRaisesRegex(ValueError, "injected result conversion failure"):
+            item["isEnabled"]((SimpleNamespace(selected=False),))
+        self._assert_blocked(item, (object(),))
+        self.assertEqual(received, [])
+
+    def test_false_after_exception_does_not_clear_failure(self):
+        received = []
+        target = SimpleNamespace(selected=False)
+        current = SimpleNamespace(selected=True)
+        outcomes = iter((ValueError("injected failure"), False, True))
+
+        def enabled(selection):
+            outcome = next(outcomes)
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+
+        item = SelectionBroker().bind(
+            Action("recover", "Recover", received.append, is_enabled=enabled),
+            "media_panel",
+        )
+        with self.assertRaisesRegex(ValueError, "injected failure"):
+            item["isEnabled"]((target,))
+        self.assertFalse(item["isEnabled"]((target,)))
+        self._assert_blocked(item, (current,))
+        self.assertEqual(received, [])
+        self.assertTrue(item["isEnabled"]((target,)))
+        item["execute"]((current,))
+        self.assertEqual(received, [(target,)])
+
+    def test_failure_is_scoped_to_action_and_context(self):
+        received = []
+        broker = SelectionBroker()
+
+        def fail(selection):
+            raise ValueError("injected failure")
+
+        action = Action("scoped", "Scoped", received.append,
+                        contexts=("media_panel", "timeline"), is_enabled=fail)
+        media = broker.bind(action, "media_panel")
+        timeline = broker.bind(action, "timeline")
+        other = broker.bind(Action("other", "Other", received.append), "media_panel")
+        target = SimpleNamespace(selected=False)
+        current = SimpleNamespace(selected=True)
+        timeline["isVisible"]((target,))
+        other["isVisible"]((target,))
+        with self.assertRaisesRegex(ValueError, "injected failure"):
+            media["isEnabled"]((target,))
+        self._assert_blocked(media, (current,))
+        timeline["execute"]((current,))
+        other["execute"]((current,))
+        self.assertEqual(received, [(target,), (target,)])
+
+    def test_no_execute_or_selection_iteration_while_predicate_runs(self):
+        received = []
+
+        class UntouchableSelection:
+            def __iter__(self):
+                raise AssertionError("must not inspect execute input")
+
+        def enabled(selection):
+            self._assert_blocked(item, UntouchableSelection())
+            return True
+
+        item = SelectionBroker().bind(
+            Action("reentry", "Reentry", received.append, is_enabled=enabled),
+            "media_panel",
+        )
+        target = SimpleNamespace(selected=False)
+        current = SimpleNamespace(selected=True)
+        self.assertTrue(item["isEnabled"]((target,)))
+        self.assertEqual(received, [])
+        item["execute"]((current,))
+        self.assertEqual(received, [(target,)])
+
+    def test_reentrant_same_key_predicate_failure_leaves_dispatch_blocked(self):
+        received = []
+        calls = []
+
+        def enabled(selection):
+            calls.append(selection)
+            item["isVisible"]((SimpleNamespace(selected=False),))
+            return True
+
+        item = SelectionBroker().bind(
+            Action("nested", "Nested", received.append, is_enabled=enabled),
+            "media_panel",
+        )
+        with self.assertRaisesRegex(RuntimeError, "predicate evaluation"):
+            item["isEnabled"]((SimpleNamespace(selected=True),))
+        self.assertEqual(len(calls), 1)
+        self._assert_blocked(item, (object(),))
+        self.assertEqual(received, [])
+
+    def test_failed_predicate_does_not_allow_menu_rebuild_to_clear_block(self):
+        received = []
+        broker = SelectionBroker()
+        registry = ActionRegistry()
+
+        def fail(selection):
+            raise ValueError("injected failure")
+
+        registry.register(Action("rebuild", "Rebuild", received.append,
+                                 contexts=("media_panel",), is_enabled=fail))
+        first = build_menu(registry, "media_panel", broker=broker)[0]["actions"][0]
+        with self.assertRaisesRegex(ValueError, "injected failure"):
+            first["isEnabled"]((object(),))
+        rebuilt = build_menu(registry, "media_panel", broker=broker)[0]["actions"][0]
+        self._assert_blocked(rebuilt, (object(),))
+        self.assertEqual(received, [])
+
+    def test_false_without_exception_keeps_legacy_selection_preference(self):
+        received = []
+        target = SimpleNamespace(selected=False)
+        current = SimpleNamespace(selected=True)
+        item = SelectionBroker().bind(
+            Action("false", "False", received.append, is_enabled=lambda selection: False),
+            "media_panel",
+        )
+        self.assertFalse(item["isEnabled"]((target,)))
+        item["execute"]((current,))
+        self.assertEqual(received, [(target,)])
+
+    def test_fresh_binding_without_predicate_can_still_execute(self):
+        received = []
+        selection = (object(),)
+        item = SelectionBroker().bind(
+            Action("direct", "Direct", received.append), "media_panel"
+        )
+        item["execute"](selection)
+        self.assertEqual(received, [selection])
+
+
 class RegistryMenuAuditTests(unittest.TestCase):
     def test_duplicate_batch_does_not_partially_register(self):
         registry = ActionRegistry()
