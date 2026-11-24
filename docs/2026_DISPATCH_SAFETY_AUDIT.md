@@ -2,6 +2,47 @@
 
 Status: isolated Python models only; Draft, unmerged, undeployed. G3/G4 NO-GO.
 
+## 2026-11-24 — experimental predicate exception policy (G2 only)
+
+The old wrappers capture selection before evaluating isVisible/isEnabled.
+A predicate exception or failing truth conversion leaves the failed
+snapshot available to execute; deleting it alone would select the
+execute argument instead, which can be a different target. The Draft
+now invalidates the snapshot on an escaping exception, re-raises the
+original error and blocks resolve/execute for that Action/context until
+**each failed predicate phase subsequently returns True**. A False
+result or the other phase's True/default cannot clear that phase's
+failure. While a predicate is evaluating, same-key nested evaluation
+and execution are rejected before execute selection conversion. These
+guards address synchronous re-entry, not threads or arbitrary host
+event ordering. A normal, caught nested rejection does not by itself
+make the enclosing successful predicate fail.
+
+The block is not one-shot: repeated execute calls cannot fall through
+to another selection. Successful recovery resumes the existing
+2025-derived priority and one-shot snapshot consumption. A False
+result without an outstanding exception retains the old behavior,
+including the fact that False is not a dispatch authorization barrier.
+An absent predicate still defaults to True in its own phase. No
+predicate is re-run during execute, no TTL or host imports are added,
+and the opt-in 2026 selection contract stays disconnected.
+
+Autodesk 2026 documents callable enable/visibility and execute tuple
+arguments, but not the failure/shortcut ordering needed to prove this
+policy in a live host. This is a conservative DGpy-specific experiment,
+not a host contract. A legitimate shortcut might remain blocked if
+Flame never invokes the failed phase again; how exceptions appear in
+Flame is also unverified. Snapshot freshness after recovery, normal
+False handling, object identity and cross-thread/host re-entry remain
+open. Do not deploy, merge, or use the production Mac. G3/G4 NO-GO.
+
+Twelve synthetic tests cover exceptions in both phases, truth conversion,
+repeated execute, phase-specific recovery, isolation, menu rebuild,
+synchronous re-entry, preserved normal False and direct execution.
+The first ten were committed separately against the old implementation
+for a controlled red run; two additional phase-specific cases accompany
+the implementation. The original 2025 SelectionBroker tests are unchanged.
+
 ## Evidence and preserved behavior
 
 Audited Public PR #7 base HEAD `003816a5538785640d81ad21c9e133039682e31e`
@@ -51,10 +92,10 @@ no host or local Python runtime verification is claimed here.
 
 - Unselected snapshots can remain stale if no later predicate replaces them.
   Snapshot age and host object lifetime are unknown; one-shot is not freshness.
-- Predicates returning False or raising are not an execution authorization barrier.
-  Existing dispatch does not re-run them; an error after capture can leave a
-  snapshot. Destructive action callbacks need their own validation. Changing
-  this policy requires separate evidence and compatibility review.
+- At the prior audit stage, False or exceptions did not block execute.
+  The experimental exception guard above addresses escaping exceptions;
+  normal False still does not authorize or forbid dispatch. Destructive
+  actions need their own validation, and actual host ordering is unresolved.
 - _same_members uses Python identity sets plus length, so duplicate multiplicity
   is not distinguished; equality does not authenticate host identity. Unknown
   iterables are coerced; failed iteration becomes empty. These remain legacy
@@ -67,9 +108,10 @@ no host or local Python runtime verification is claimed here.
   anonymous hierarchy/waitCursor/separator support or Qt lifecycle is proved
   by these tests. Bootstrap catches menu-building failures, not later callbacks.
 
-Next: separately evaluate predicate failure snapshot policy with synthetic tests
-and compatibility evidence; obtain an independent disposable Flame 2026 environment
-before investigating actual callbacks, hierarchy/shortcuts and proxy lifetime.
+Next: assess remaining malformed/duplicate selection and host-name
+collision risks without assuming host semantics; obtain an independent
+disposable Flame 2026 environment before validating callback ordering,
+exception recovery, hierarchy/shortcuts and proxy lifetime.
 Production Mac, Hook paths, Profile/settings, permissions, local checkouts and
 sources/ are untouched. No installation, merge, reset or force update.
 

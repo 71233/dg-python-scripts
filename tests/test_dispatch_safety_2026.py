@@ -133,7 +133,8 @@ class PredicateFailurePolicyTests(unittest.TestCase):
                 raise ValueError("injected visibility failure")
             return True
 
-        item = SelectionBroker().bind(
+        broker = SelectionBroker()
+        item = broker.bind(
             Action("visible", "Visible", received.append, is_visible=visible),
             "media_panel",
         )
@@ -143,6 +144,7 @@ class PredicateFailurePolicyTests(unittest.TestCase):
         self._assert_blocked(item, (current,))
         self._assert_blocked(item, (failed,))
         self.assertEqual(received, [])
+        self.assertEqual(broker._snapshots, {})
 
     def test_enabled_exception_blocks_until_new_positive_predicate(self):
         received = []
@@ -237,12 +239,16 @@ class PredicateFailurePolicyTests(unittest.TestCase):
     def test_no_execute_or_selection_iteration_while_predicate_runs(self):
         received = []
 
+        iterated = []
+
         class UntouchableSelection:
             def __iter__(self):
+                iterated.append(True)
                 raise AssertionError("must not inspect execute input")
 
         def enabled(selection):
             self._assert_blocked(item, UntouchableSelection())
+            self.assertEqual(iterated, [])
             return True
 
         item = SelectionBroker().bind(
@@ -312,6 +318,65 @@ class PredicateFailurePolicyTests(unittest.TestCase):
         )
         item["execute"](selection)
         self.assertEqual(received, [selection])
+
+
+    def test_other_positive_or_default_phase_cannot_clear_failure(self):
+        for visible in (None, lambda selection: True):
+            with self.subTest(explicit_visibility=visible is not None):
+                received = []
+                target = SimpleNamespace(selected=False)
+                current = SimpleNamespace(selected=True)
+                fail = True
+
+                def enabled(selection):
+                    if fail:
+                        raise ValueError("injected failure")
+                    return True
+
+                item = SelectionBroker().bind(
+                    Action("phase", "Phase", received.append,
+                           is_visible=visible, is_enabled=enabled),
+                    "media_panel",
+                )
+                with self.assertRaisesRegex(ValueError, "injected failure"):
+                    item["isEnabled"]((target,))
+                self.assertTrue(item["isVisible"]((current,)))
+                self._assert_blocked(item, (current,))
+                self.assertEqual(received, [])
+                fail = False
+                self.assertTrue(item["isEnabled"]((target,)))
+                item["execute"]((current,))
+                self.assertEqual(received, [(target,)])
+
+    def test_each_failed_phase_must_independently_recover(self):
+        received = []
+        failed = {"visible", "enabled"}
+
+        def predicate(phase):
+            def evaluate(selection):
+                if phase in failed:
+                    raise ValueError("injected " + phase + " failure")
+                return True
+            return evaluate
+
+        item = SelectionBroker().bind(
+            Action("both", "Both", received.append,
+                   is_visible=predicate("visible"), is_enabled=predicate("enabled")),
+            "media_panel",
+        )
+        target = SimpleNamespace(selected=False)
+        current = SimpleNamespace(selected=True)
+        for phase, callback in (("visible", "isVisible"), ("enabled", "isEnabled")):
+            with self.assertRaisesRegex(ValueError, "injected " + phase + " failure"):
+                item[callback]((target,))
+        failed.remove("visible")
+        self.assertTrue(item["isVisible"]((target,)))
+        self._assert_blocked(item, (current,))
+        self.assertEqual(received, [])
+        failed.remove("enabled")
+        self.assertTrue(item["isEnabled"]((target,)))
+        item["execute"]((current,))
+        self.assertEqual(received, [(target,)])
 
 
 class RegistryMenuAuditTests(unittest.TestCase):
