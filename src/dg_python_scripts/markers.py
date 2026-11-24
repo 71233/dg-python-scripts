@@ -19,6 +19,10 @@ class MarkerApplyError(MarkerDeleteError):
         super().__init__(message)
 
 
+class StaleMarkerDeleteError(MarkerApplyError):
+    """Preview snapshot no longer matches; no delete callback was invoked."""
+
+
 @dataclass(frozen=True)
 class MarkerDeleteTarget:
     obj: Any
@@ -162,6 +166,31 @@ def apply_delete_plan(
 
     if not callable(delete_marker):
         raise TypeError("delete_marker must be callable")
+
+    # Recheck *all* captured collections before the very first destructive
+    # callback. Compare identity, not proxy equality: a new or reordered
+    # proxy is conservatively treated as stale until Flame validates it.
+    # This is NOT atomic with deletion and cannot eliminate host races.
+    for target in plan.targets:
+        try:
+            current = _as_tuple(
+                getattr(target.obj, "markers"),
+                label=f"markers of {target.display_name!r}",
+            )
+        except Exception as error:
+            raise StaleMarkerDeleteError(
+                f"Could not revalidate markers for {target.display_name!r} "
+                "before deletion; no markers were deleted.",
+                deleted=0,
+            ) from error
+        if (len(current) != len(target.markers)
+                or any(actual is not expected
+                       for actual, expected in zip(current, target.markers))):
+            raise StaleMarkerDeleteError(
+                f"Markers changed since preview for {target.display_name!r}; "
+                "no markers were deleted.",
+                deleted=0,
+            )
 
     deleted = 0
     changed_targets = 0
