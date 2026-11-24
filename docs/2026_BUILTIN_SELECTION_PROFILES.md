@@ -26,7 +26,7 @@ to the current UI or live Host**.
 
 ## Reviewed source of truth
 
-The existing Public `src/dg_python_scripts/actions/main_menu.py`, `rename_action.py`, `delete_markers_action.py`, `registry.py`, `rename.py` and `markers.py` remain unchanged. The new `BUILTIN_SELECTION_PROFILES` table is deliberately limited to the three registered built-in Action IDs:
+The existing Public `src/dg_python_scripts/actions/main_menu.py`, `rename_action.py`, `delete_markers_action.py` and `registry.py` remain unchanged. The same Draft branch now includes narrow, synthetic-tested changes to `rename.py` and `markers.py` only; these are separate from the static Selection profile and **not deployed**. The new `BUILTIN_SELECTION_PROFILES` table is deliberately limited to the three registered built-in Action IDs:
 
 | Existing Action | Existing context(s) | G2 Selection preview | Important missing proof |
 | --- | --- | --- | --- |
