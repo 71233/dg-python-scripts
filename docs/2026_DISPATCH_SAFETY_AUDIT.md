@@ -72,3 +72,24 @@ and compatibility evidence; obtain an independent disposable Flame 2026 environm
 before investigating actual callbacks, hierarchy/shortcuts and proxy lifetime.
 Production Mac, Hook paths, Profile/settings, permissions, local checkouts and
 sources/ are untouched. No installation, merge, reset or force update.
+
+## Verified CI and legacy cross-check
+
+[CI 45309681465](https://github.com/71233/dg-python-scripts/actions/runs/45309681465)
+for head `e56116664eeaeed03cc619bf3450e24b999e70e4`: Ubuntu 24.04.5,
+CPython 3.11.18, **197/197 unittest cases**, including all 13 new cases and
+the original three SelectionBroker tests; editable install and wheel succeeded.
+The job checked out GitHub's synthetic PR merge ref
+`308c6f4b93b93e5ba9325e636b6e97814e957f68`
+(head e561166 into unchanged main 1764a9f), not a user checkout or an actual merge.
+No pre-fix test run was performed; the defect explanation is source analysis
+plus passing fixed-code regression cases, not a measured red/green comparison.
+
+Public 2025 Draft #4 at `85568fd56bfa73b4e29d871ffdb59378dcb977a2`
+has identical tests/test_core.py content to the pre-audit #7 file.
+Its docs/FLAME_NOTES.md records the same legacy selection preference as
+an existing-code contract and distinguishes user reports from new measurements.
+Those records and tests were read only; neither legacy PR was changed.
+Public #7 has no docs/DEVELOPMENT.md or docs/FLAME_NOTES.md; current 2026
+development and host notes are in Internal #3. No new 2025/2026 host
+observation was made. G3/G4 remain NO-GO.
