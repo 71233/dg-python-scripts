@@ -141,6 +141,32 @@ class RenameTemporaryFailureTests(unittest.TestCase):
         self.assertTrue(cm.exception.rollback_errors)
         self.assertTrue(clip.name.value.startswith("__DGPY_TMP_"))
 
+    def test_final_failure_then_rollback_restores_both_targets(self):
+        first = PyClip("First")
+        second = PyClip("Second", name_failure="final_after_write")
+        with self.assertRaises(RenameApplyError) as cm:
+            apply_plan(build_plan((first, second), "New_{index}"))
+        self.assertEqual((first.name.value, second.name.value), ("First", "Second"))
+        self.assertEqual(cm.exception.rollback_errors, ())
+
+    def test_final_rollback_rejection_is_reported_without_success(self):
+        class RejectOriginalRestore(FakeName):
+            def set_value(self, new_value):
+                if new_value == self.original and self.value != self.original:
+                    self.calls.append(new_value)
+                    raise RuntimeError("injected restore rejection")
+                return super().set_value(new_value)
+
+        first = PyClip("First")
+        first.name = RejectOriginalRestore("First")
+        second = PyClip("Second", name_failure="final_after_write")
+        with self.assertRaises(RenameApplyError) as cm:
+            apply_plan(build_plan((first, second), "New_{index}"))
+        self.assertTrue(cm.exception.rollback_errors)
+        self.assertIn("restore rejection", str(cm.exception))
+        self.assertTrue(first.name.value.startswith("__DGPY_ROLLBACK_"))
+        self.assertEqual(second.name.value, "Second")
+
     def test_stale_preview_before_any_write_remains_blocked(self):
         clip = PyClip("Original")
         plan = build_plan((clip,), "New_{index}")
@@ -214,6 +240,57 @@ class MarkerStalePreviewTests(unittest.TestCase):
         self.assertEqual(result.changed_targets, 2)
         self.assertEqual(len(calls), 2)
         self.assertEqual((first.markers, second.markers), ([], []))
+
+    def test_callback_failure_after_deleting_last_marker_is_reported(self):
+        marker = PyMarker()
+        clip = PyClip("Private clip", (marker,))
+        plan = build_delete_plan((clip,))
+        calls = []
+
+        def delete_then_raise(candidate):
+            calls.append(candidate)
+            clip.markers.remove(candidate)
+            raise RuntimeError("injected callback failure after removal")
+
+        with self.assertRaises(MarkerApplyError) as cm:
+            apply_delete_plan(plan, delete_then_raise)
+        self.assertEqual(calls, [marker])
+        self.assertEqual(clip.markers, [])
+        self.assertEqual(cm.exception.deleted, 1)
+        self.assertIn("RuntimeError", str(cm.exception))
+
+    def test_callback_failure_after_delete_across_targets_is_not_hidden(self):
+        first, second, first_marker, second_marker, plan = deletion_fixture()
+        normal_delete, calls = recording_delete(first, second)
+
+        def delete_with_error(marker):
+            normal_delete(marker)
+            if marker is first_marker:
+                raise RuntimeError("injected failure after first removal")
+
+        with self.assertRaises(MarkerApplyError) as cm:
+            apply_delete_plan(plan, delete_with_error)
+        self.assertEqual(calls, [first_marker, second_marker])
+        self.assertEqual((first.markers, second.markers), ([], []))
+        self.assertIn("injected failure", str(cm.exception))
+
+    def test_change_after_precheck_must_not_report_full_success(self):
+        # This mutation occurs in the first delete callback, hence AFTER
+        # the all-target recheck. No Python-only check can make it atomic.
+        first, second, first_marker, _, plan = deletion_fixture()
+        normal_delete, calls = recording_delete(first, second)
+        new_marker = PyMarker()
+
+        def deletion_with_race(marker):
+            if marker is first_marker:
+                second.markers.append(new_marker)
+            normal_delete(marker)
+
+        with self.assertRaises(MarkerApplyError):
+            apply_delete_plan(plan, deletion_with_race)
+        self.assertTrue(any(item is new_marker for item in second.markers))
+        # The implementation may have deleted part of the original plan.
+        # Do not assert that partial deletion is acceptable or desired.
 
     def test_ui_catches_stale_as_existing_marker_apply_error(self):
         clip = PyClip("Private clip", (PyMarker(),))
