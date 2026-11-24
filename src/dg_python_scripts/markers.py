@@ -83,6 +83,13 @@ def _as_tuple(value: Any, *, label: str) -> tuple[Any, ...]:
         ) from error
 
 
+def _same_marker_snapshot(actual: tuple[Any, ...], expected: tuple[Any, ...]) -> bool:
+    """Conservative proxy-identity comparison, NOT verified Flame marker UID."""
+    return len(actual) == len(expected) and all(
+        a is b for a, b in zip(actual, expected)
+    )
+
+
 def can_delete_markers_selection(selection: Iterable[Any]) -> bool:
     try:
         items = tuple(selection)
@@ -183,9 +190,7 @@ def apply_delete_plan(
                 "before deletion; no markers were deleted.",
                 deleted=0,
             ) from error
-        if (len(current) != len(target.markers)
-                or any(actual is not expected
-                       for actual, expected in zip(current, target.markers))):
+        if not _same_marker_snapshot(current, target.markers):
             raise StaleMarkerDeleteError(
                 f"Markers changed since preview for {target.display_name!r}; "
                 "no markers were deleted.",
@@ -194,18 +199,59 @@ def apply_delete_plan(
 
     deleted = 0
     changed_targets = 0
-    failures: list[str] = []
 
     for target in plan.targets:
         if not target.markers:
             continue
 
-        delete_errors: list[str] = []
+        # A prior target's callback may have changed this target *after*
+        # the all-target preflight. Stop before touching its stale refs.
+        # This recheck still cannot prevent a host change immediately
+        # after it or guarantee stable Python proxy identities.
+        try:
+            current = _as_tuple(
+                getattr(target.obj, "markers"),
+                label=f"markers of {target.display_name!r}",
+            )
+        except Exception as error:
+            raise MarkerApplyError(
+                f"Could not revalidate markers for {target.display_name!r} "
+                "during deletion; no further delete calls were made.",
+                deleted=deleted,
+            ) from error
+        if not _same_marker_snapshot(current, target.markers):
+            raise MarkerApplyError(
+                f"Markers changed for {target.display_name!r} during deletion; "
+                "no further delete calls were made.",
+                deleted=deleted,
+            )
+
         for marker in target.markers:
             try:
                 delete_marker(marker)
             except Exception as error:
-                delete_errors.append(f"{type(error).__name__}: {error}")
+                # A callback may mutate its target *and then* raise.
+                # Count is an estimate from the live length difference,
+                # not a trustworthy number of successful delete calls.
+                try:
+                    remaining = _as_tuple(
+                        getattr(target.obj, "markers"),
+                        label=f"markers of {target.display_name!r}",
+                    )
+                except Exception:
+                    raise MarkerApplyError(
+                        f"Delete callback failed for {target.display_name!r} "
+                        f"({type(error).__name__}: {error}); read-back unavailable. "
+                        "No further delete calls were made.",
+                        deleted=deleted,
+                    ) from error
+                estimate = max(0, target.marker_count - len(remaining))
+                raise MarkerApplyError(
+                    f"Delete callback failed for {target.display_name!r} "
+                    f"({type(error).__name__}: {error}); "
+                    "no further delete calls were made.",
+                    deleted=deleted + estimate,
+                ) from error
 
         try:
             remaining = _as_tuple(
@@ -213,32 +259,24 @@ def apply_delete_plan(
                 label=f"markers of {target.display_name!r}",
             )
         except Exception as error:
-            failures.append(
-                f"{target.display_name}: could not verify deletion "
-                f"({type(error).__name__}: {error})"
-            )
-            continue
+            raise MarkerApplyError(
+                f"Could not verify deletion for {target.display_name!r} "
+                f"({type(error).__name__}: {error}); "
+                "no further delete calls were made.",
+                deleted=deleted,
+            ) from error
 
         removed = max(0, target.marker_count - len(remaining))
         deleted += removed
         if removed:
             changed_targets += 1
 
-        # A host callback may delete a marker and *then* raise. Even
-        # when read-back shows zero remaining, never suppress the error
-        # or report an unverified operation as fully successful.
-        if remaining or delete_errors:
-            details: list[str] = []
-            if remaining:
-                details.append(f"{len(remaining)} marker(s) remain")
-            if delete_errors:
-                details.append(f"delete errors: {' | '.join(delete_errors)}")
-            failures.append(f"{target.display_name}: {'; '.join(details)}")
-
-    if failures:
-        raise MarkerApplyError(
-            "Marker deletion was incomplete:\n- " + "\n- ".join(failures),
-            deleted=deleted,
-        )
+        if remaining:
+            raise MarkerApplyError(
+                f"Marker deletion was incomplete:\n- {target.display_name}: "
+                f"{len(remaining)} marker(s) remain; "
+                "no further delete calls were made.",
+                deleted=deleted,
+            )
 
     return MarkerDeleteResult(deleted=deleted, changed_targets=changed_targets)
