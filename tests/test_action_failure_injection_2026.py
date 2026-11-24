@@ -272,6 +272,163 @@ class RenameRollbackAuditTests(unittest.TestCase):
                             for issue in cm.exception.rollback_errors))
 
 
+class RenameForwardVerificationTests(unittest.TestCase):
+    """Synthetic concurrent edits; not evidence of Flame host behavior."""
+
+    def _assert_stopped(self, plan, stage):
+        with self.assertRaises(RenameApplyError) as cm:
+            apply_plan(plan)
+        self.assertIn(stage, str(cm.exception))
+        self.assertIn("No further rename or rollback calls", str(cm.exception))
+        self.assertEqual(cm.exception.rollback_errors, ())
+        return cm.exception
+
+    def test_first_temporary_guard_detects_drift_after_global_preflight(self):
+        first = PyClip("First")
+        second = PyClip("Second")
+
+        class ChangeFirstDuringPreflight(FakeName):
+            reads = 0
+
+            def get_value(self):
+                self.reads += 1
+                if self.reads == 2:  # preview, then global preflight
+                    first.name.value = "External edit"
+                return super().get_value()
+
+        second.name = ChangeFirstDuringPreflight("Second")
+        self._assert_stopped(build_plan((first, second), "New_{index}"),
+                             "temporary rename pre-write")
+        self.assertEqual(first.name.value, "External edit")
+        self.assertEqual(first.name.calls, [])
+        self.assertEqual(second.name.calls, [])
+
+    def test_later_temporary_guard_preserves_detected_external_edit(self):
+        first, second = PyClip("First"), PyClip("Second")
+
+        class ChangeSecondOnTemporary(FakeName):
+            def set_value(self, new_value):
+                super().set_value(new_value)
+                if new_value.startswith("__DGPY_TMP_"):
+                    second.name.value = "External edit"
+
+        first.name = ChangeSecondOnTemporary("First")
+        self._assert_stopped(build_plan((first, second), "New_{index}"),
+                             "temporary rename pre-write")
+        self.assertEqual(len(first.name.calls), 1)
+        self.assertTrue(first.name.value.startswith("__DGPY_TMP_"))
+        self.assertEqual(second.name.calls, [])
+        self.assertEqual(second.name.value, "External edit")
+
+    def test_later_temporary_guard_stops_on_unreadable_name(self):
+        first, second = PyClip("First"), PyClip("Second")
+
+        class DenyRead(FakeName):
+            denied = False
+
+            def get_value(self):
+                if self.denied:
+                    raise RuntimeError("injected unreadable name")
+                return super().get_value()
+
+        second.name = DenyRead("Second")
+
+        class DenySecondOnTemporary(FakeName):
+            def set_value(self, new_value):
+                super().set_value(new_value)
+                if new_value.startswith("__DGPY_TMP_"):
+                    second.name.denied = True
+
+        first.name = DenySecondOnTemporary("First")
+        error = self._assert_stopped(
+            build_plan((first, second), "New_{index}"), "temporary rename pre-write"
+        )
+        self.assertIn("injected unreadable name", str(error))
+        self.assertEqual(len(first.name.calls), 1)
+        self.assertEqual(second.name.calls, [])
+        self.assertEqual(second.name.value, "Second")
+
+    def test_final_guard_stops_before_first_final_write_on_changed_temporary(self):
+        first, second = PyClip("First"), PyClip("Second")
+
+        class ChangeFirstOnTemporary(FakeName):
+            def set_value(self, new_value):
+                super().set_value(new_value)
+                if new_value.startswith("__DGPY_TMP_"):
+                    first.name.value = "External edit"
+
+        second.name = ChangeFirstOnTemporary("Second")
+        self._assert_stopped(build_plan((first, second), "New_{index}"),
+                             "final rename pre-write")
+        self.assertEqual(first.name.value, "External edit")
+        self.assertEqual(len(first.name.calls), 1)
+        self.assertEqual(len(second.name.calls), 1)
+        self.assertTrue(second.name.value.startswith("__DGPY_TMP_"))
+
+    def test_later_final_guard_stops_after_earlier_final_write(self):
+        first, second = PyClip("First"), PyClip("Second")
+
+        class ChangeSecondOnFinal(FakeName):
+            def set_value(self, new_value):
+                super().set_value(new_value)
+                if new_value == "New_1":
+                    second.name.value = "External edit"
+
+        first.name = ChangeSecondOnFinal("First")
+        self._assert_stopped(build_plan((first, second), "New_{index}"),
+                             "final rename pre-write")
+        self.assertEqual(first.name.value, "New_1")
+        self.assertEqual(len(first.name.calls), 2)
+        self.assertEqual(second.name.value, "External edit")
+        self.assertEqual(len(second.name.calls), 1)
+
+    def test_final_verification_detects_later_setter_changing_earlier_name(self):
+        first, second = PyClip("First"), PyClip("Second")
+
+        class ChangeFirstOnFinal(FakeName):
+            def set_value(self, new_value):
+                super().set_value(new_value)
+                if new_value == "New_2":
+                    first.name.value = "External edit"
+
+        second.name = ChangeFirstOnFinal("Second")
+        self._assert_stopped(build_plan((first, second), "New_{index}"),
+                             "final verification")
+        self.assertEqual(first.name.value, "External edit")
+        self.assertEqual(second.name.value, "New_2")
+        self.assertEqual((len(first.name.calls), len(second.name.calls)), (2, 2))
+
+    def test_final_verification_stops_on_late_unreadable_name(self):
+        first, second = PyClip("First"), PyClip("Second")
+
+        class DenyAfterFinalReadback(FakeName):
+            final_reads = 0
+
+            def get_value(self):
+                if self.value == "New_1":
+                    self.final_reads += 1
+                    if self.final_reads > 1:
+                        raise RuntimeError("injected final verification read failure")
+                return super().get_value()
+
+        first.name = DenyAfterFinalReadback("First")
+        error = self._assert_stopped(
+            build_plan((first, second), "New_{index}"), "final verification"
+        )
+        self.assertIn("injected final verification read failure", str(error))
+        self.assertEqual((first.name.value, second.name.value), ("New_1", "New_2"))
+        self.assertEqual((len(first.name.calls), len(second.name.calls)), (2, 2))
+
+    def test_healthy_forward_checks_preserve_two_writes_per_row(self):
+        first, second = PyClip("First"), PyClip("Second")
+        result = apply_plan(build_plan((first, second), "New_{index}"))
+        self.assertEqual(result.changed, 2)
+        self.assertEqual((first.name.value, second.name.value), ("New_1", "New_2"))
+        for clip in (first, second):
+            self.assertEqual(len(clip.name.calls), 2)
+            self.assertTrue(clip.name.calls[0].startswith("__DGPY_TMP_"))
+
+
 class RenameApplyDialogTests(unittest.TestCase):
     """Exercise the actual apply callback with fake UI and name attributes."""
 

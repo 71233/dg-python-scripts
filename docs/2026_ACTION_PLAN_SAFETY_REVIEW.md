@@ -15,6 +15,32 @@ also includes **separate, narrowly scoped fixes to the existing**
 `rename.py` and `markers.py` apply paths, verified only with synthetic
 failure injection and Linux CI; it has not been merged or deployed.
 
+## 2026-11-24 — Rename forward guards and final verification (Draft only)
+
+The previous global preflight and per-setter read-back did not cover
+changes between targets. Before each temporary write, compare the
+captured attribute to its original name; before each final write,
+compare it to that row's generated temporary name. After all final
+writes, read every ready row and compare with its proposed name before
+returning success. Mismatch or unavailable read in any new guard raises
+a private subclass of RenameApplyError. **No further setters or
+automatic rollback are invoked after that detection**, because the
+unexpected/unknown state might include an external edit. Earlier
+temporary or final names may remain; the existing failure UI warns of
+uncertain recovery and closes. An empty rollback_errors tuple on this
+path does not mean restoration occurred. The old global stale-preview
+check and existing compensation for setter/read-back failures remain.
+
+Eight synthetic regression cases exercise original-name drift after
+global preflight, later-row drift/read failure, temporary-name drift
+before final writes, late drift/read failure at final verification,
+and healthy writes. No host lock, stable attribute identity,
+atomic compare-and-set, atomic final snapshot, concurrent recovery
+or verified real Flame behavior is claimed. Changes after a guard or
+between final reads can still escape detection. No unrelated rows
+are inspected; existing rollback hazards and actual G3 host behavior
+remain unresolved. G3/G4 NO-GO.
+
 ## 2026-11-24 — Rename rollback verification and failure lockout (Draft only)
 
 Individual restoration writes were read back, but a later setter could
