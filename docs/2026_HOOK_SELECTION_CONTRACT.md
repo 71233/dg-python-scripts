@@ -9,6 +9,11 @@ does not call Flame or any write method, and has **no automatic
 connection to the existing SelectionBroker, menus or apply functions**.
 Successful preview does **not** establish live object capabilities,
 freshness, transaction rollback or authorization to delete markers.
+A [separate synthetic failure-injection review](2026_ACTION_PLAN_SAFETY_REVIEW.md)
+has since added narrowly scoped fixes to the existing Rename and
+Marker apply paths **in this unmerged Draft branch**. The Selection
+contract and existing Hook/Menu/SelectionBroker wiring are unchanged,
+and the fixes do not establish host atomicity or G3 readiness.
 
 **Status: experimental, host-independent, and not connected to Flame.**
 
