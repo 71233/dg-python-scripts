@@ -25,10 +25,10 @@ def _as_tuple(selection: Any) -> tuple[Any, ...]:
 def _selected_state(obj: Any) -> bool | None:
     try:
         value = getattr(obj, "selected")
+        getter = getattr(value, "get_value", None)
     except Exception:
         return None
 
-    getter = getattr(value, "get_value", None)
     if callable(getter):
         try:
             value = getter()
