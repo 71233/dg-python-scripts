@@ -64,7 +64,7 @@ class PyMarker:
     pass
 
 
-class UnreadableClip(PyClip):
+class PySequence(PyClip):
     def __init__(self, name, markers=()):
         super().__init__(name, markers)
         self.deny_read = False
@@ -195,8 +195,9 @@ class MarkerStalePreviewTests(unittest.TestCase):
 
     def test_unreadable_later_target_blocks_without_deletion(self):
         first = PyClip("First", (PyMarker(),))
-        second = UnreadableClip("Second", (PyMarker(),))
+        second = PySequence("Second", (PyMarker(),))
         plan = build_delete_plan((first, second))
+        self.assertEqual(len(plan.targets), 2)
         second.deny_read = True
         delete, calls = recording_delete(first, second)
         with self.assertRaises(StaleMarkerDeleteError) as cm:
