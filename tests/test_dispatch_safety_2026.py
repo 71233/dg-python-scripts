@@ -12,7 +12,8 @@ from unittest.mock import patch
 from dg_python_scripts import hooks
 from dg_python_scripts.actions.menu import build_menu
 from dg_python_scripts.actions.registry import ACTION_CONTEXTS, Action, ActionRegistry
-from dg_python_scripts.actions.selection import SelectionBroker
+from dg_python_scripts.actions.selection import SelectionBroker, SelectionInputError, SelectionPredicateError
+from dg_python_scripts.extensions.loader import load_extensions
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -377,6 +378,205 @@ class PredicateFailurePolicyTests(unittest.TestCase):
         self.assertTrue(item["isEnabled"]((target,)))
         item["execute"]((current,))
         self.assertEqual(received, [(target,)])
+
+
+class SelectionInputAuditTests(unittest.TestCase):
+    def _binding(self):
+        self.received = []
+        self.predicates = []
+        broker = SelectionBroker()
+        item = broker.bind(Action("input", "Input", self.received.append,
+                                  is_enabled=lambda selection: self.predicates.append(selection) or True),
+                           "media_panel")
+        return broker, item
+
+    def test_duplicate_predicate_clears_old_snapshot_and_blocks_until_recovery(self):
+        broker, item = self._binding()
+        old, current = SimpleNamespace(selected=False), object()
+        item["isVisible"]((old,))
+        with self.assertRaisesRegex(SelectionInputError, "duplicate"):
+            item["isEnabled"]((old, old))
+        self.assertEqual(broker._snapshots, {})
+        self.assertEqual(self.predicates, [])
+        with self.assertRaises(SelectionPredicateError):
+            item["execute"]((current,))
+        self.assertEqual(self.received, [])
+        self.assertTrue(item["isEnabled"]((current,)))
+        item["execute"]((current,))
+        self.assertEqual(self.received, [(current,)])
+
+    def test_duplicate_execute_never_uses_preferred_snapshot(self):
+        broker, item = self._binding()
+        old, current = SimpleNamespace(selected=False), object()
+        item["isVisible"]((old,))
+        with self.assertRaisesRegex(SelectionInputError, "duplicate"):
+            item["execute"]((current, current))
+        self.assertEqual(self.received, [])
+        self.assertEqual(broker._snapshots, {})
+        item["execute"]((current,))
+        self.assertEqual(self.received, [(current,)])
+
+    def test_equal_identity_sets_with_different_multiplicity_are_rejected(self):
+        _, item = self._binding()
+        a, b = object(), object()
+        item["isVisible"]((a, b))
+        with self.assertRaisesRegex(SelectionInputError, "duplicate"):
+            item["execute"]((a, a, b))
+        self.assertEqual(self.received, [])
+
+    def test_arbitrary_iterables_rejected_without_consumption(self):
+        calls = []
+
+        class Hostile:
+            def __iter__(self):
+                calls.append("iterated")
+                raise AssertionError("must not iterate")
+
+        class TupleSubclass(tuple):
+            def __iter__(self):
+                calls.append("subclass")
+                raise AssertionError("must not iterate")
+
+        class ListSubclass(list):
+            def __iter__(self):
+                calls.append("subclass")
+                raise AssertionError("must not iterate")
+
+        for value in (Hostile(), TupleSubclass(), ListSubclass(), None, "clip", {"clip": object()}):
+            with self.subTest(kind=type(value).__name__):
+                _, item = self._binding()
+                with self.assertRaises(SelectionInputError):
+                    item["isEnabled"](value)
+                self.assertEqual(self.predicates, [])
+                _, item = self._binding()
+                with self.assertRaises(SelectionInputError):
+                    item["execute"](value)
+                self.assertEqual(self.received, [])
+        self.assertEqual(calls, [])
+
+    def test_failed_execute_does_not_fall_back_to_empty_or_snapshot(self):
+        broker, item = self._binding()
+        item["isVisible"]((SimpleNamespace(selected=False),))
+        with self.assertRaises(SelectionInputError):
+            item["execute"](None)
+        self.assertEqual(broker._snapshots, {})
+        self.assertEqual(self.received, [])
+
+    def test_primitive_items_rejected_before_any_selected_property_access(self):
+        calls = []
+
+        class Probe:
+            @property
+            def selected(self):
+                calls.append("selected")
+                return False
+
+        class StringSubclass(str):
+            pass
+
+        for value in (None, False, 3, "clip", StringSubclass("clip"), [], {}):
+            with self.subTest(kind=type(value).__name__):
+                _, item = self._binding()
+                with self.assertRaises(SelectionInputError):
+                    item["isEnabled"]((Probe(), value))
+                self.assertEqual(self.predicates, [])
+                _, item = self._binding()
+                with self.assertRaises(SelectionInputError):
+                    item["execute"]((value,))
+                self.assertEqual(self.received, [])
+        self.assertEqual(calls, [])
+
+    def test_plain_list_and_empty_tuple_keep_legacy_behavior(self):
+        _, item = self._binding()
+        target, current = SimpleNamespace(selected=False), object()
+        self.assertTrue(item["isEnabled"]([target]))
+        item["execute"]([current])
+        item["execute"](())
+        self.assertEqual(self.predicates, [(target,)])
+        self.assertEqual(self.received, [(target,), ()])
+
+    def test_distinct_objects_never_compared_by_equality(self):
+        class NoCompare:
+            selected = True
+            def __eq__(self, other):
+                raise AssertionError("must not compare objects")
+            def __hash__(self):
+                raise AssertionError("must not hash objects")
+
+        _, item = self._binding()
+        first, second = NoCompare(), NoCompare()
+        item["isVisible"]((first, second))
+        item["execute"]((second, first))
+        self.assertIs(self.received[0][0], first)
+        self.assertIs(self.received[0][1], second)
+
+
+class HostNameCollisionTests(unittest.TestCase):
+    def _action(self, identifier, caption="Name", **kwargs):
+        return Action(identifier, caption, lambda selection: None, **kwargs)
+
+    def test_same_context_default_names_conflict(self):
+        registry = ActionRegistry()
+        first = self._action("first")
+        registry.register(first)
+        with self.assertRaisesRegex(ValueError, "Duplicate Flame action name"):
+            registry.register(self._action("second"))
+        self.assertEqual(registry.actions(), (first,))
+
+    def test_explicit_name_conflicts_across_hierarchy_in_same_context(self):
+        registry = ActionRegistry()
+        first = self._action("first", "Original", flame_name="Stable", hierarchy=())
+        registry.register(first)
+        with self.assertRaisesRegex(ValueError, "Duplicate Flame action name"):
+            registry.register(self._action("second", "Stable", hierarchy=("Other",)))
+        self.assertEqual(registry.actions(), (first,))
+
+    def test_batch_collision_against_existing_is_atomic(self):
+        registry = ActionRegistry()
+        first = self._action("first")
+        registry.register(first)
+        with self.assertRaisesRegex(ValueError, "Duplicate Flame action name"):
+            registry.register_many((self._action("new", "New"), self._action("collision")))
+        self.assertEqual(registry.actions(), (first,))
+
+    def test_batch_collision_within_pending_is_atomic(self):
+        registry = ActionRegistry()
+        with self.assertRaisesRegex(ValueError, "Duplicate Flame action name"):
+            registry.register_many((self._action("first"), self._action("second")))
+        self.assertEqual(registry.actions(), ())
+
+    def test_overlap_across_multi_context_actions_is_rejected(self):
+        registry = ActionRegistry()
+        first = self._action("first", contexts=("main_menu", "media_panel"))
+        registry.register(first)
+        with self.assertRaisesRegex(ValueError, "media_panel"):
+            registry.register(self._action("second", contexts=("media_panel", "timeline")))
+        self.assertEqual(registry.actions(), (first,))
+
+    def test_disjoint_contexts_and_distinct_explicit_names_remain_valid(self):
+        registry = ActionRegistry()
+        first = self._action("first", contexts=("main_menu",))
+        second = self._action("second", contexts=("media_panel",))
+        third = self._action("third", flame_name="Different", contexts=("main_menu",))
+        registry.register_many((first, second, third))
+        self.assertEqual(registry.actions(), (first, second, third))
+        self.assertEqual(registry.actions("main_menu"), (first, third))
+
+    def test_extension_conflict_rejects_whole_extension_and_continues(self):
+        registry = ActionRegistry()
+        first = self._action("first")
+        registry.register(first)
+
+        def bad(staging):
+            staging.register_many((self._action("new", "New"), self._action("collision")))
+
+        good = self._action("good", "Good")
+        modules = {"bad": SimpleNamespace(register=bad),
+                   "good": SimpleNamespace(register=lambda staging: staging.register(good))}
+        with patch("dg_python_scripts.extensions.loader.importlib.import_module",
+                   side_effect=modules.__getitem__), self.assertLogs("dgpy.extensions", level="ERROR"):
+            self.assertEqual(load_extensions(("bad", "good"), registry), ("good",))
+        self.assertEqual(registry.actions(), (first, good))
 
 
 class RegistryMenuAuditTests(unittest.TestCase):

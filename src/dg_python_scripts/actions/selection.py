@@ -5,12 +5,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, TYPE_CHECKING
 
+from .selection_contract import selection_item_is_primitive
+
 if TYPE_CHECKING:
     from .registry import Action
 
 
 class SelectionPredicateError(RuntimeError):
     """Dispatch stopped because a predicate is pending or previously failed."""
+
+
+class SelectionInputError(ValueError):
+    """A callback selection cannot be safely interpreted."""
 
 
 @dataclass(frozen=True)
@@ -20,10 +26,23 @@ class _SelectionSnapshot:
 
 
 def _as_tuple(selection: Any) -> tuple[Any, ...]:
-    try:
-        return tuple(selection)
-    except Exception:
-        return ()
+    # Flame documents a tuple. Retain plain-list compatibility without
+    # executing arbitrary iterator methods or accepting scalar values.
+    if type(selection) is tuple:
+        items = selection
+    elif type(selection) is list:
+        items = tuple(selection)
+    else:
+        raise SelectionInputError("DGpy selection must be a plain tuple or list.")
+    seen: set[int] = set()
+    for item in items:
+        if selection_item_is_primitive(item):
+            raise SelectionInputError("DGpy selection contains an invalid item.")
+        key = id(item)
+        if key in seen:
+            raise SelectionInputError("DGpy selection contains a duplicate object.")
+        seen.add(key)
+    return items
 
 
 def _selected_state(obj: Any) -> bool | None:
@@ -76,6 +95,8 @@ class SelectionBroker:
     No time-to-live heuristic is used. A predicate exception invalidates
     its snapshot and blocks this binding until the failed phase returns
     True on a later evaluation. False alone retains legacy behavior.
+    Both callback paths reject invalid shapes, primitive items and
+    repeated Python identities. This is not host object authentication.
     This is a conservative failure policy, not host authorization.
     """
 
@@ -112,8 +133,10 @@ class SelectionBroker:
                 "DGpy action blocked: predicate evaluation failed; "
                 "a new successful evaluation of the failed phase is required."
             )
-        executed = _as_tuple(execute_selection)
+        # An execute attempt consumes its snapshot even if its input is
+        # invalid. Never use an old context target instead of bad input.
         snapshot = self._snapshots.pop(key, None)
+        executed = _as_tuple(execute_selection)
         if snapshot is None:
             return executed
 

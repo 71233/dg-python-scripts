@@ -88,12 +88,12 @@ def _policy_valid(policy: object) -> bool:
                and 1 <= len(name) <= 128 for name in allowed)
 
 
-def _is_primitive(value: object) -> bool:
+def selection_item_is_primitive(value: object) -> bool:
     # Read only class metadata, not a Flame object's __class__, __bool__,
     # selected/name properties, or any other instance attribute.
     cls = type(value)
     bases = type.__getattribute__(cls, "__mro__")
-    return any(base in _PRIMITIVES for base in bases)
+    return any(base is primitive for base in bases for primitive in _PRIMITIVES)
 
 
 def inspect_hook_selection(
@@ -133,7 +133,7 @@ def inspect_hook_selection(
     seen_ids: set[int] = set()
     seen_names: set[str] = set()
     for item in selection:
-        if _is_primitive(item):
+        if selection_item_is_primitive(item):
             return _blocked("invalid_selection_item", context, phase)
         key = id(item)
         if key in seen_ids:

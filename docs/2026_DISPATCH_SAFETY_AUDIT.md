@@ -2,6 +2,49 @@
 
 Status: isolated Python models only; Draft, unmerged, undeployed. G3/G4 NO-GO.
 
+## 2026-11-24 — malformed selections and same-context host names (G2 only)
+
+Flame 2026's [Custom UI Actions specification](https://help.autodesk.com/cloudhelp/2026/ENU/Flame-API/files/Python-Hooks-Reference/Flame_API_Python_Hooks_Reference_Custom_UI_Actions_html.html)
+documents tuple callback inputs, action names intended to be unique,
+and a shortcut for each custom action. It does not specify whether
+different hook contexts share a single name namespace, case folding,
+or how custom actions collide with installed hooks and shortcuts.
+
+The existing broker coerced arbitrary iterables to tuples, treating
+conversion exceptions as empty selections. A malformed execute could
+therefore select an earlier unselected snapshot; duplicate identities
+also made set/length matching ambiguous. The Draft accepts only plain
+tuples and plain lists (the latter retained as local compatibility,
+not a documented Flame payload). It rejects primitives and repeated
+Python identities before accessing selected metadata or dispatching
+the action. It shares the primitive classifier with the opt-in
+selection reviewer, not the reviewer's full contract, size cap,
+context/action profiles or live wiring. Invalid predicate input follows
+the existing exception block; invalid execute input consumes its
+snapshot and raises without calling the Action. A later fresh valid
+execute remains allowed unless a predicate failure is outstanding.
+No arbitrary iterable or tuple/list subclass is consumed. Normal
+empty selections, distinct objects and legacy priority remain intact.
+
+ActionRegistry now rejects exact duplicate host names among distinct
+Actions in an overlapping context, regardless of menu hierarchy or
+whether the name comes from caption or flame_name. Both single and
+batch registration validate before mutation; the existing extension
+loader rejects an entire conflicting extension and continues. Names,
+captions, existing shortcut identities and cross-context registration
+are not rewritten. This does not establish global shortcut uniqueness,
+case/Unicode normalization, or the namespace of third-party hooks.
+Current Public built-ins and the recorded Internal diagnostic action
+have distinct host names; actual integration with this Draft remains
+unverified.
+
+Fifteen additional synthetic regressions cover malformed/duplicate
+inputs, failure recovery, no arbitrary iteration or instance access
+during validation, identity order, plain-list/empty compatibility,
+same-context name overlap, batch atomicity and extension isolation.
+The previous tests are retained. No actual Flame callback, registered
+shortcut or production environment was exercised. G3/G4 NO-GO.
+
 ## 2026-11-24 — experimental predicate exception policy (G2 only)
 
 The old wrappers capture selection before evaluating isVisible/isEnabled.
@@ -96,13 +139,12 @@ no host or local Python runtime verification is claimed here.
   The experimental exception guard above addresses escaping exceptions;
   normal False still does not authorize or forbid dispatch. Destructive
   actions need their own validation, and actual host ordering is unresolved.
-- _same_members uses Python identity sets plus length, so duplicate multiplicity
-  is not distinguished; equality does not authenticate host identity. Unknown
-  iterables are coerced; failed iteration becomes empty. These remain legacy
-  behavior, not a validated 2026 contract.
-- Registry rejects duplicate internal IDs atomically for normal Action batches,
-  but does not enforce host-name uniqueness. Across modules/groups, shortcut
-  naming and load ordering still require isolated host verification.
+- The current Draft rejects duplicate identities and malformed callback
+  shapes before resolution (see above); identity does not authenticate host
+  objects or distinguish two different proxies for the same host object.
+- Exact same-context host names are rejected within the DGpy registry.
+  Cross-context, external modules, group names, shortcut naming and actual
+  load ordering still require isolated host verification.
 - Cached bindings and process registry retain references for the process lifetime.
   No unload/reload, concurrent/reentrant predicate capture, proxy validity,
   anonymous hierarchy/waitCursor/separator support or Qt lifecycle is proved

@@ -99,7 +99,21 @@ class ActionRegistry:
     def register(self, action: Action) -> None:
         if action.id in self._actions:
             raise ValueError(f"Duplicate action id: {action.id}")
+        self._check_host_names((action,))
         self._actions[action.id] = action
+
+    def _check_host_names(self, pending: tuple[Action, ...]) -> None:
+        """Reject exact name collisions inside a single DGpy hook context."""
+        seen: dict[tuple[str, str], str] = {}
+        for action in (*self._actions.values(), *pending):
+            for context in action.contexts:
+                key = (context, action.host_name)
+                if key in seen:
+                    raise ValueError(
+                        f"Duplicate Flame action name {action.host_name!r} "
+                        f"in {context}: {seen[key]!r} and {action.id!r}"
+                    )
+                seen[key] = action.id
 
     def register_many(self, actions) -> None:
         pending = tuple(actions)
@@ -113,6 +127,7 @@ class ActionRegistry:
             raise ValueError(f"Duplicate action ids in batch: {duplicates}")
         if conflicts:
             raise ValueError(f"Action ids already registered: {conflicts}")
+        self._check_host_names(pending)
         for action in pending:
             self._actions[action.id] = action
 
