@@ -15,6 +15,27 @@ also includes **separate, narrowly scoped fixes to the existing**
 `rename.py` and `markers.py` apply paths, verified only with synthetic
 failure injection and Linux CI; it has not been merged or deployed.
 
+## 2026-11-24 — honest Marker failure diagnostics (Draft only)
+
+The existing error dialog previously presented `MarkerApplyError.deleted`
+as an exact "Deleted before failure" count, even after an unreadable
+collection or an insertion that hid a real deletion in the net count.
+The dialog now distinguishes a `StaleMarkerDeleteError` (DGpy made no
+delete calls) from other apply failures (the deletion count is not
+reliably verified; markers may already have changed or been deleted;
+no automatic restoration was attempted; inspect the affected targets).
+It omits the numeric estimate in the failure dialog, retains the original
+error details, and makes no change to delete sequencing, success
+notifications or cancellation. The legacy exception field remains
+available for compatibility, not as an authenticated count.
+
+The existing stale-dialog test was updated and seven additional fake-host
+UI regression cases cover rejection before mutation, mutation then
+exception, insertion masking a removal, unreadable remainder, unexpected
+multi-deletion, healthy success and cancel. These exercise the existing
+dialog entry point using a mock Flame module; they are not live UI/Flame
+observations. G3/G4 remain NO-GO; no production deployment or restore.
+
 ## 2026-11-24 — within-target Marker recheck (Draft only)
 
 **Further G2 failure injection:** The previous version rechecked each
@@ -69,8 +90,9 @@ the Flame runtime.
 - `MarkerApplyError.deleted` is a **best-effort net count estimate**.
   A failed re-read may leave it at zero after a real deletion;
   insertion/replacement can also make the value misleading. The
-  existing error dialog still uses that legacy field; treat it
-  as a diagnostic, **not verified deletion or successful recovery**.
+  error dialog at that stage used that legacy field; the newer
+  failure diagnostic above omits it. Treat it as a diagnostic,
+  **not verified deletion or successful recovery**.
 
 Actual Flame 2026.2.3 macOS/Python 3.11.5, Marker proxy lifetime,
 concurrent edits and undo/recovery remain **unverified**. Do not

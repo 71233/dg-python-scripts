@@ -507,7 +507,127 @@ class MarkerStalePreviewTests(unittest.TestCase):
             show_delete_markers((clip,))
         self.assertEqual(events["deleted"], [])
         self.assertEqual([kind for kind, _ in events["dialogs"]], ["warning", "error"])
-        self.assertIn("Deleted before failure: 0", events["dialogs"][-1][1])
+        message = events["dialogs"][-1][1]
+        self.assertIn("DGpy made no delete calls.", message)
+        self.assertIn("Review the selection and current markers", message)
+        self.assertNotIn("Deleted before failure:", message)
+        self.assertNotIn("Some markers may already", message)
+
+
+class MarkerFailureDialogTests(unittest.TestCase):
+    """Check the existing dialog through fake Flame callbacks, never the host."""
+
+    def _run_action(self, clip, callback, *, answer="Delete Markers"):
+        events = {"dialogs": [], "deleted": [], "console": []}
+
+        def show_in_dialog(title, message, dialog_type, buttons, cancel_button=""):
+            events["dialogs"].append((dialog_type, message))
+            return answer if dialog_type == "warning" else "OK"
+
+        def delete(marker, confirm=False):
+            self.assertFalse(confirm)
+            events["deleted"].append(marker)
+            callback(marker)
+
+        flame = types.SimpleNamespace(
+            messages=types.SimpleNamespace(
+                show_in_dialog=show_in_dialog,
+                show_in_console=lambda *args: events["console"].append(args),
+            ),
+            delete=delete,
+        )
+        with patch.dict(sys.modules, {"flame": flame}):
+            show_delete_markers((clip,))
+        return events
+
+    def _assert_uncertain_failure(self, events, expected_calls):
+        self.assertEqual(events["deleted"], expected_calls)
+        self.assertEqual([kind for kind, _ in events["dialogs"]], ["warning", "error"])
+        self.assertEqual(events["console"], [])
+        message = events["dialogs"][-1][1]
+        self.assertIn("The number of deleted markers could not be reliably verified.", message)
+        self.assertIn("Some markers may already have been changed or deleted.", message)
+        self.assertIn("No automatic restoration was attempted.", message)
+        self.assertIn("Inspect the affected clips/sequences", message)
+        self.assertNotIn("Deleted before failure:", message)
+        self.assertNotIn("DGpy made no delete calls.", message)
+        return message
+
+    def test_ui_callback_rejected_before_mutation_has_no_claimed_count(self):
+        first, second = PyMarker(), PyMarker()
+        clip = PyClip("Private", (first, second))
+
+        def reject(marker):
+            raise RuntimeError("injected rejection")
+
+        events = self._run_action(clip, reject)
+        message = self._assert_uncertain_failure(events, [first])
+        self.assertIn("injected rejection", message)
+        self.assertEqual(clip.markers, [first, second])
+
+    def test_ui_callback_mutated_then_raised_warns_of_partial_change(self):
+        first, second = PyMarker(), PyMarker()
+        clip = PyClip("Private", (first, second))
+
+        def remove_then_raise(marker):
+            clip.markers.remove(marker)
+            raise RuntimeError("injected failure after removal")
+
+        events = self._run_action(clip, remove_then_raise)
+        message = self._assert_uncertain_failure(events, [first])
+        self.assertIn("injected failure after removal", message)
+        self.assertEqual(clip.markers, [second])
+
+    def test_ui_net_zero_after_insertion_does_not_claim_zero_deletions(self):
+        first, second, extra = PyMarker(), PyMarker(), PyMarker()
+        clip = PyClip("Private", (first, second))
+
+        def remove_and_insert(marker):
+            clip.markers.remove(marker)
+            clip.markers.append(extra)
+
+        events = self._run_action(clip, remove_and_insert)
+        self._assert_uncertain_failure(events, [first])
+        self.assertEqual(clip.markers, [second, extra])
+
+    def test_ui_unreadable_remainder_does_not_claim_zero_deletions(self):
+        first, second = PyMarker(), PyMarker()
+        clip = PySequence("Private", (first, second))
+
+        def remove_then_deny(marker):
+            clip.markers.remove(marker)
+            clip.deny_read = True
+
+        events = self._run_action(clip, remove_then_deny)
+        message = self._assert_uncertain_failure(events, [first])
+        self.assertIn("Could not revalidate remaining markers", message)
+        self.assertEqual(vars(clip)["markers"], [second])
+
+    def test_ui_unexpected_multi_deletion_does_not_claim_success_count(self):
+        first, second = PyMarker(), PyMarker()
+        clip = PyClip("Private", (first, second))
+        events = self._run_action(clip, lambda marker: clip.markers.clear())
+        self._assert_uncertain_failure(events, [first])
+        self.assertEqual(clip.markers, [])
+
+    def test_ui_healthy_delete_retains_success_notification(self):
+        first, second = PyMarker(), PyMarker()
+        clip = PyClip("Private", (first, second))
+        events = self._run_action(clip, clip.markers.remove)
+        self.assertEqual(events["deleted"], [first, second])
+        self.assertEqual(clip.markers, [])
+        self.assertEqual([kind for kind, _ in events["dialogs"]], ["warning"])
+        self.assertEqual(len(events["console"]), 1)
+        self.assertIn("Deleted 2 marker(s) from 1 Clip/Sequence", events["console"][0][0])
+
+    def test_ui_cancel_makes_no_delete_calls(self):
+        first = PyMarker()
+        clip = PyClip("Private", (first,))
+        events = self._run_action(clip, clip.markers.remove, answer="Cancel")
+        self.assertEqual(events["deleted"], [])
+        self.assertEqual(clip.markers, [first])
+        self.assertEqual([kind for kind, _ in events["dialogs"]], ["warning"])
+        self.assertEqual(events["console"], [])
 
 
 if __name__ == "__main__":

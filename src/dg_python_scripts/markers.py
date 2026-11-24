@@ -14,6 +14,8 @@ class MarkerDeleteError(RuntimeError):
 
 
 class MarkerApplyError(MarkerDeleteError):
+    """Deletion stopped; deleted is a best-effort net estimate, not a verified count."""
+
     def __init__(self, message: str, *, deleted: int = 0):
         self.deleted = deleted
         super().__init__(message)
@@ -187,13 +189,13 @@ def apply_delete_plan(
         except Exception as error:
             raise StaleMarkerDeleteError(
                 f"Could not revalidate markers for {target.display_name!r} "
-                "before deletion; no markers were deleted.",
+                "before deletion; DGpy made no delete calls.",
                 deleted=0,
             ) from error
         if not _same_marker_snapshot(current, target.markers):
             raise StaleMarkerDeleteError(
                 f"Markers changed since preview for {target.display_name!r}; "
-                "no markers were deleted.",
+                "DGpy made no delete calls.",
                 deleted=0,
             )
 
