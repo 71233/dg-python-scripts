@@ -10,8 +10,49 @@ from existing Public DGpy, **not the current Flame host**.
 Neither function reads `name.get_value()`, `markers`, a live Selection,
 a current reel or an object's `selected` property; they never call
 `set_value()`, `flame.delete()`, `apply_plan()`, `apply_delete_plan()`,
-Qt, filesystem operations or any Hook. They are **not invoked by the
-current menus**, so existing runtime behavior remains unchanged.
+Qt, filesystem operations or any Hook. They are **not invoked by the current menus**. This Draft branch now
+also includes **separate, narrowly scoped fixes to the existing**
+`rename.py` and `markers.py` apply paths, verified only with synthetic
+failure injection and Linux CI; it has not been merged or deployed.
+
+## 2026-11-24 — failure-injection regression and narrow Draft-only fixes
+
+Disposable Python reproductions of the **pre-fix algorithms** demonstrated:
+
+- A temporary Rename setter changing a second target and then raising
+  leaves the second target with a temporary name while the previous
+  target is restored.
+- A stale marker list on a later target permits deleting an earlier
+  target's markers before the stale list is discovered.
+
+The patched **Public Draft PR #7** changes only
+`src/dg_python_scripts/rename.py` and
+`src/dg_python_scripts/markers.py` plus synthetic tests/docs.
+It does **not** modify the existing Hook, menu, SelectionBroker, Qt UI,
+deletion dialog or bootstrap. The new marker error inherits from the
+existing `MarkerApplyError`, so the existing UI catches it and
+reports that zero markers were deleted when the preflight stops.
+
+The new `tests/test_action_failure_injection_2026.py` has **13
+regression cases**: partial setter failure, transient read-back failure,
+failed restore reporting, pre-apply stale Rename, healthy rename,
+added/removed/replaced/reordered markers, unreadable later target,
+healthy deletion, and simulated dialog-confirmation-time state change.
+
+[Public PR #7 GitHub Actions 45299428735](https://github.com/71233/dg-python-scripts/actions/runs/45299428735)
+passed **145/145 Python 3.11 unit tests**, editable installation and
+wheel build on Ubuntu 24.04. An initial CI attempt exposed a **test
+fixture error**: an unreadable marker target used an unsupported class
+name and was excluded by the existing target collector. After
+changing the fixture to a supported `PySequence` and asserting two
+targets were collected, the full CI passed. No Flame object was used
+or modified.
+
+**Not established:** actual Flame Python 3.11.5 behavior, pointer/proxy
+stability, callback Selection equivalence, safe concurrent edits,
+atomicity, per-project namespace rules or complete rollback.
+These are **G3** requirements. The branch remains Draft and must
+not be merged or deployed on the user's only production Mac.
 
 ## Supported evidence and limits
 
@@ -45,13 +86,21 @@ uses temporary names and rollback steps to handle name swaps.
 These are **existing implementation observations**, not tested
 Flame 2026.2.3 behavior.
 
-**Potential failure point found by static review:** during temporary
-renaming, an object is added to `temporary_rows` *after*
-`_write_exact()` returns. If `set_value()` partially changes the
-host object but read-back then fails, that object might not be included
-in the first rollback list. Confirm and address this with disposable
-failure-injection fixtures **before** relying on transactional rollback.
-The new structural reviewer does not fix the write path.
+**Confirmed in a synthetic failure-injection reproducer:** the previous
+temporary rename path recorded a row for rollback only *after*
+`_write_exact()` returned. A setter that changed the value then raised
+left the failed target at a temporary name. This Draft branch now
+records every **attempted** temporary target before invoking the
+setter, and attempts to restore all attempted targets in reverse
+order. It skips a redundant restore when the target still has its
+original name and records any restoration failure in
+`RenameApplyError.rollback_errors`.
+
+**Residual limitation:** This is a best-effort compensation procedure,
+not a host transaction. If the original name cannot be read or restored
+or the setter has undocumented side effects, recovery can still fail.
+A passing Python test cannot establish Flame 2026.2.3 transactional
+semantics or collision-free namespaces.
 
 Before any future operation on a safe test host, a separately verified
 adapter needs to establish fresh Selection identity at **execute**
@@ -67,14 +116,23 @@ Existing `markers.build_delete_plan()` reads `PyClip` /
 confirmation dialog and calls `flame.delete(marker, confirm=False)`
 only after confirmation.
 
-**Potential failure point found by static review:** the current
-`markers.apply_delete_plan()` loops over the markers captured during
-preview and validates remaining markers **after** issuing deletions.
-A target collection may change between preview and confirmation.
-It does not first compare every live marker collection with the
-snapshot before the **first** deletion. A stale plan may therefore
-cause partial deletion before a mismatch is noticed. The new
-structural reviewer does not solve this time-of-check/time-of-use gap.
+**Confirmed in a synthetic failure-injection reproducer:** the
+previous `markers.apply_delete_plan()` could delete markers from
+the first target before discovering that a later target's
+captured marker collection was stale. In this Draft branch, the
+apply path now re-reads **every target's** marker collection before
+the first delete callback. It conservatively requires matching
+collection length **and matching Python proxy identity in order**.
+A difference or an unreadable collection raises
+`StaleMarkerDeleteError(MarkerApplyError)` with `deleted=0`, using
+the **existing error-dialog handler**. It does not call the delete
+callback on that preflight failure.
+
+**Residual limitation:** A re-check is not atomic with deletion,
+and Flame might materialize fresh Python proxy objects across reads.
+A valid plan could be rejected, or the host could still change after
+preflight. The structural plan reviewer remains independent and
+does not eliminate this time-of-check/time-of-use gap.
 
 Even a separate read-back at confirmation time would leave a host
 race between checking and deleting. A safe solution requires documented
