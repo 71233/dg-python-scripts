@@ -224,15 +224,16 @@ def apply_delete_plan(
         if removed:
             changed_targets += 1
 
-        if remaining:
-            detail = (
-                f"; delete errors: {' | '.join(delete_errors)}"
-                if delete_errors
-                else ""
-            )
-            failures.append(
-                f"{target.display_name}: {len(remaining)} marker(s) remain{detail}"
-            )
+        # A host callback may delete a marker and *then* raise. Even
+        # when read-back shows zero remaining, never suppress the error
+        # or report an unverified operation as fully successful.
+        if remaining or delete_errors:
+            details: list[str] = []
+            if remaining:
+                details.append(f"{len(remaining)} marker(s) remain")
+            if delete_errors:
+                details.append(f"delete errors: {' | '.join(delete_errors)}")
+            failures.append(f"{target.display_name}: {'; '.join(details)}")
 
     if failures:
         raise MarkerApplyError(
