@@ -15,6 +15,53 @@ also includes **separate, narrowly scoped fixes to the existing**
 `rename.py` and `markers.py` apply paths, verified only with synthetic
 failure injection and Linux CI; it has not been merged or deployed.
 
+## 2026-11-24 — late mutation, callback errors and rollback-failure diagnostics
+
+A further isolated review of the **unmerged Draft** shows:
+
+- **Marker callback exception after a successful mutation:** The prior
+  `apply_delete_plan()` collected callback exceptions but only reported
+  them when markers remained. A callback that removed the last marker
+  *and then raised* could therefore return success, hiding an error.
+  A disposable Python reproducer demonstrated this false-success path.
+  The Draft-only fix now treats `remaining or delete_errors` as a
+  failure, even when a read-back shows an empty marker collection.
+  The caller receives `MarkerApplyError` through its existing UI
+  error path; an exception does **not** imply the operation was undone.
+- **Marker mutation *after* all-target preflight:** A test deliberately
+  adds a marker to a later target inside the first delete callback,
+  after all preliminary snapshots were checked. The operation still
+  may partially delete captured markers before returning an error.
+  This is a **documented, unresolved TOCTOU race**. There is no
+  general-purpose atomic bulk-delete guarantee from the Python check.
+- **Rename final-stage rollback:** Two additional fixtures cover
+  restoration after a final-name write error and an explicit rejection
+  of restoration. The rejected restoration remains visibly incomplete,
+  but `RenameApplyError.rollback_errors` records the failed
+  compensation instead of declaring a successful rename.
+
+Five new unit methods extend
+`tests/test_action_failure_injection_2026.py` from **13 to 18**.
+[GitHub Actions run 45303403657](https://github.com/71233/dg-python-scripts/actions/runs/45303403657)
+**passed 150/150 Public unit tests** on Ubuntu 24.04 / Python 3.11,
+along with editable installation and wheel build. No production
+Flame object, user Hook or production setup was accessed.
+
+**Result semantics:** `MarkerApplyError.deleted` comes from the
+preexisting *net-count difference* between captured and remaining
+collections. Concurrent insertions, proxy re-instantiation and
+partial callback side effects can make this an **unreliable estimate**
+of exactly how many delete calls succeeded. It is diagnostic, not
+proof that every deleted object was known or recoverable.
+
+**G3 remains NO-GO.** Actual Flame 2026.2.3 Python 3.11.5/macOS
+proxy identity, host delete/rollback semantics, caller Selection,
+and safe restoration after partially destructive operations are
+unverified. No redesign can honestly claim a transaction without
+an independently validated host mechanism. Keep both Public Draft
+PRs unmerged and do not attempt destructive probes on the only
+production Mac.
+
 ## 2026-11-24 — failure-injection regression and narrow Draft-only fixes
 
 Disposable Python reproductions of the **pre-fix algorithms** demonstrated:
