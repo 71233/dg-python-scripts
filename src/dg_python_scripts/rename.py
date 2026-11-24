@@ -1,4 +1,4 @@
-"""Capability-based batch rename planning and transactional apply."""
+"""Capability-based batch rename planning and best-effort apply/rollback."""
 
 from __future__ import annotations
 
@@ -272,6 +272,28 @@ def _read_name(target: RenameTarget) -> str:
     return value
 
 
+class _RenameStateDrift(RenameApplyError):
+    """A guard found unexpected or unreadable state; do not write again."""
+
+
+def _require_expected_name(target: RenameTarget, expected: str, stage: str) -> None:
+    """Compare captured attribute state, not an atomic host-side guard."""
+    guidance = "No further rename or rollback calls were made after this check."
+    try:
+        actual = _read_name(target)
+    except RenameError as error:
+        raise _RenameStateDrift(
+            f"Could not verify name during {stage} for {target.type_name} "
+            f"(original {target.original_name!r}): {error}. {guidance}"
+        ) from error
+    if actual != expected:
+        raise _RenameStateDrift(
+            f"Unexpected name during {stage} for {target.type_name} "
+            f"(original {target.original_name!r}): "
+            f"expected {expected!r}, actual {actual!r}. {guidance}"
+        )
+
+
 def _write_exact(target: RenameTarget, requested: str) -> None:
     try:
         target.name_attribute.set_value(requested)
@@ -288,6 +310,27 @@ def _write_exact(target: RenameTarget, requested: str) -> None:
             f"Flame did not apply the requested name for {target.type_name}: "
             f"requested {requested!r}, actual {actual!r}"
         )
+
+
+def _verify_original_names(rows: tuple[RenamePreviewRow, ...]) -> tuple[str, ...]:
+    """Read-only final rollback check; does not imply an atomic snapshot."""
+    errors: list[str] = []
+    for row in rows:
+        target = row.target
+        assert target is not None
+        try:
+            actual = _read_name(target)
+        except RenameError as error:
+            errors.append(
+                f"Could not verify original name {target.original_name!r}: {error}"
+            )
+            continue
+        if actual != target.original_name:
+            errors.append(
+                f"Original name not restored for {target.type_name}: "
+                f"expected {target.original_name!r}, actual {actual!r}"
+            )
+    return tuple(errors)
 
 
 def _rollback_after_final_failure(
@@ -342,33 +385,74 @@ def apply_plan(plan: RenamePlan) -> RenameApplyResult:
             )
 
     nonce = f"{time.time_ns():x}"
-    temporary_rows: list[RenamePreviewRow] = []
+    # A setter can mutate a name and *then* raise, or its read-back can
+    # fail after a successful write. Record each attempted target *before*
+    # writing so the failing target is also considered for rollback.
+    attempted_rows: list[RenamePreviewRow] = []
 
     try:
         for index, row in enumerate(rows):
             target = row.target
             assert target is not None
+            _require_expected_name(
+                target, target.original_name, "temporary rename pre-write"
+            )
+            attempted_rows.append(row)
             _write_exact(target, f"__DGPY_TMP_{nonce}_{index:04d}__")
-            temporary_rows.append(row)
+    except _RenameStateDrift:
+        # Unexpected or unreadable state can be another host/user edit.
+        # Do not attempt to repair or overwrite it. Earlier writes may
+        # remain; the existing UI handles this as an uncertain failure.
+        raise
     except RenameError as error:
         rollback_errors: list[str] = []
-        for row in reversed(temporary_rows):
+        for row in reversed(attempted_rows):
             target = row.target
             assert target is not None
+            try:
+                # Avoid an unnecessary setter call when the failed write
+                # left the original name unchanged.
+                if _read_name(target) == target.original_name:
+                    continue
+            except RenameError:
+                # Unknown state: best-effort restoration with verified
+                # read-back, not a claim of transactional host semantics.
+                pass
             try:
                 _write_exact(target, target.original_name)
             except RenameError as rollback_error:
                 rollback_errors.append(str(rollback_error))
+        # A later rollback setter can change an earlier row, and a failed
+        # callback can affect a row we never attempted. Inspect every ready
+        # row without writing to it or trying another round of recovery.
+        rollback_errors.extend(_verify_original_names(rows))
         raise RenameApplyError(str(error), rollback_errors) from error
 
     try:
-        for row in rows:
+        for index, row in enumerate(rows):
             target = row.target
             assert target is not None
             assert row.new_name is not None
+            _require_expected_name(
+                target, f"__DGPY_TMP_{nonce}_{index:04d}__", "final rename pre-write"
+            )
             _write_exact(target, row.new_name)
+    except _RenameStateDrift:
+        # The existing compensation path is for setter/read-back
+        # failures, not a newly detected conflicting or unknown state.
+        raise
     except RenameError as error:
         rollback_errors = _rollback_after_final_failure(rows, nonce)
+        rollback_errors += _verify_original_names(rows)
         raise RenameApplyError(str(error), rollback_errors) from error
+
+    # A later setter can invalidate an earlier successful read-back.
+    # Inspect all ready rows before returning success; a mismatch or
+    # unknown value stops without further writes or automatic recovery.
+    for row in rows:
+        target = row.target
+        assert target is not None
+        assert row.new_name is not None
+        _require_expected_name(target, row.new_name, "final verification")
 
     return RenameApplyResult(changed=len(rows))

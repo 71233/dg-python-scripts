@@ -38,6 +38,39 @@ def _representative_row(plan):
     return None
 
 
+def _apply_current_plan(state, rename_button, dialog, show_error, refresh_preview):
+    """Consume the preview before apply; never rebase after an apply failure."""
+    plan = state["plan"]
+    if state["blocked"] or plan is None:
+        return
+    # Block re-entry and preview refresh before invoking host setters or
+    # opening a modal error dialog (which may process nested UI events).
+    state["blocked"] = True
+    state["plan"] = None
+    rename_button.setEnabled(False)
+    try:
+        apply_plan(plan)
+    except StaleRenameError as error:
+        show_error(
+            f"{error}\n\nDGpy made no rename calls. "
+            "Review the refreshed preview before trying again."
+        )
+        state["blocked"] = False
+        refresh_preview()
+    except RenameApplyError as error:
+        try:
+            show_error(
+                f"{error}\n\nRename stopped. Names may have changed, "
+                "and temporary names may remain. Restoration is not guaranteed.\n"
+                "Inspect the affected items and their original names before "
+                "opening Rename again."
+            )
+        finally:
+            dialog.reject()
+    else:
+        dialog.accept()
+
+
 def show_rename_dialog(selection=()) -> None:
     from PySide6 import QtCore, QtGui, QtWidgets
 
@@ -156,7 +189,7 @@ def show_rename_dialog(selection=()) -> None:
     root.addLayout(replacement_rows_layout)
 
     replacement_rows: list[dict[str, object]] = []
-    state = {"plan": None}
+    state = {"plan": None, "blocked": False}
 
     def current_rules() -> tuple[ReplacementRule, ...]:
         return tuple(
@@ -387,6 +420,8 @@ def show_rename_dialog(selection=()) -> None:
     custom_index_action.triggered.connect(insert_custom_index)
 
     def refresh_preview() -> None:
+        if state["blocked"]:
+            return
         try:
             plan = build_plan(
                 selected,
@@ -428,20 +463,15 @@ def show_rename_dialog(selection=()) -> None:
         rename_button.setEnabled(bool(plan.ready_rows))
 
     def apply_current_plan() -> None:
-        plan = state["plan"]
-        if plan is None:
-            return
-        try:
-            apply_plan(plan)
-        except (StaleRenameError, RenameApplyError) as error:
-            QtWidgets.QMessageBox.critical(
-                dialog,
-                "DGpy Rename",
-                str(error),
-            )
-            refresh_preview()
-            return
-        dialog.accept()
+        _apply_current_plan(
+            state,
+            rename_button,
+            dialog,
+            lambda message: QtWidgets.QMessageBox.critical(
+                dialog, "DGpy Rename", message
+            ),
+            refresh_preview,
+        )
 
     template_edit.textChanged.connect(refresh_preview)
     cancel_button.clicked.connect(dialog.reject)

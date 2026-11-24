@@ -4,6 +4,7 @@ from .registry import Action, ActionRegistry
 from dg_python_scripts.markers import (
     MarkerApplyError,
     MarkerDeleteError,
+    StaleMarkerDeleteError,
     apply_delete_plan,
     build_delete_plan,
     can_delete_markers_selection,
@@ -79,10 +80,23 @@ def show_delete_markers(selection=()) -> None:
             lambda marker: flame.delete(marker, confirm=False),
         )
     except MarkerApplyError as error:
+        if isinstance(error, StaleMarkerDeleteError):
+            guidance = (
+                "Review the selection and current markers before starting again."
+            )
+        else:
+            # deleted is a net-count estimate, not a verified deletion count.
+            # Even zero can hide a partial deletion or a failed read-back.
+            guidance = (
+                "The number of deleted markers could not be reliably verified. "
+                "Some markers may already have been changed or deleted.\n"
+                "No automatic restoration was attempted. "
+                "Inspect the affected clips/sequences before any further operation."
+            )
         _show_dialog(
             flame,
             "DGpy Delete Markers",
-            f"{error}\n\nDeleted before failure: {error.deleted}",
+            f"{error}\n\n{guidance}",
             "error",
             ("OK",),
         )
