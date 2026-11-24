@@ -12,12 +12,15 @@ ownership, successful writes or rollback.** Every matching result still
 requires a live host recheck; marker deletion also requires explicit
 operator confirmation.
 
-**Important code-review findings:** Existing Rename's temporary-write
-failure path may omit a partially changed target from rollback;
-existing Marker deletion does not pre-compare all live marker snapshots
-before starting destructive calls. These are *static review risks*,
-not yet reproduced or repaired on Flame 2026.2.3. The plan auditor is
-not connected to the Action Registry, the current UI or the live Host.
+**Failure-injection follow-up:** The two prior static risks were
+reproduced using disposable Python objects. [The Action failure
+review](2026_ACTION_PLAN_SAFETY_REVIEW.md) now documents **minimal
+Draft-only runtime fixes** in `rename.py` (attempted-row rollback)
+and `markers.py` (check every captured marker collection before
+the first delete callback). These are **not Flame 2026.2.3
+host-validated** and do not provide atomic rollback or host-safe
+bulk deletion. The advisory plan auditor itself is **still not wired
+to the current UI or live Host**.
 
 **Status: isolated G2 model only. No Action dispatch, Flame/Qt import, profile mutation, Hook installation or production Mac test.** This companion to the [2026 Hook/Selection callback contract](2026_HOOK_SELECTION_CONTRACT.md) expresses **existing Public DGpy built-in Action requirements** as *advisory* structural policies. It is **not** used by `hooks.py`, `actions/menu.py`, `SelectionBroker`, the bootstrap, or any running Flame process.
 
