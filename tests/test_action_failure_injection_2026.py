@@ -22,6 +22,7 @@ from dg_python_scripts.markers import (
     build_delete_plan,
 )
 from dg_python_scripts.actions.delete_markers_action import show_delete_markers
+from dg_python_scripts.ui.rename import _apply_current_plan
 
 
 class FakeName:
@@ -180,6 +181,181 @@ class RenameTemporaryFailureTests(unittest.TestCase):
         result = apply_plan(build_plan((first, second), "New_{index}"))
         self.assertEqual(result.changed, 2)
         self.assertEqual((first.name.value, second.name.value), ("New_1", "New_2"))
+
+
+class RenameRollbackAuditTests(unittest.TestCase):
+    def test_temp_rollback_later_restore_changes_already_restored_row(self):
+        first = PyClip("First")
+        second = PyClip("Second", name_failure="temp_after_write")
+
+        class ChangeEarlierRestoredName(FakeName):
+            def set_value(self, new_value):
+                super().set_value(new_value)
+                if new_value == self.original:
+                    second.name.value = "Changed during rollback"
+
+        first.name = ChangeEarlierRestoredName("First")
+        with self.assertRaises(RenameApplyError) as cm:
+            apply_plan(build_plan((first, second), "New_{index}"))
+        self.assertEqual(first.name.value, "First")
+        self.assertEqual(second.name.value, "Changed during rollback")
+        self.assertTrue(any("Original name not restored" in issue
+                            and "'Second'" in issue
+                            for issue in cm.exception.rollback_errors))
+
+    def test_final_rollback_later_restore_changes_already_restored_row(self):
+        first = PyClip("First")
+        second = PyClip("Second")
+
+        class ChangeFirstOnRestore(FakeName):
+            def set_value(self, new_value):
+                super().set_value(new_value)
+                if new_value == self.original:
+                    first.name.value = "Changed during rollback"
+
+        second.name = ChangeFirstOnRestore("Second", failure="final_after_write")
+        with self.assertRaises(RenameApplyError) as cm:
+            apply_plan(build_plan((first, second), "New_{index}"))
+        self.assertEqual(second.name.value, "Second")
+        self.assertEqual(first.name.value, "Changed during rollback")
+        self.assertTrue(any("Original name not restored" in issue
+                            and "'First'" in issue
+                            for issue in cm.exception.rollback_errors))
+
+    def test_final_rollback_audit_unreadable_after_successful_readback(self):
+        class DenyAfterRestoreReadback(FakeName):
+            restored = False
+            restored_reads = 0
+
+            def set_value(self, new_value):
+                super().set_value(new_value)
+                if new_value == self.original:
+                    self.restored = True
+
+            def get_value(self):
+                if self.restored:
+                    self.restored_reads += 1
+                    if self.restored_reads > 1:
+                        raise RuntimeError("injected final audit read failure")
+                return super().get_value()
+
+        first = PyClip("First")
+        first.name = DenyAfterRestoreReadback("First")
+        second = PyClip("Second", name_failure="final_after_write")
+        with self.assertRaises(RenameApplyError) as cm:
+            apply_plan(build_plan((first, second), "New_{index}"))
+        self.assertEqual(first.name.value, "First")
+        self.assertTrue(any("Could not verify original name 'First'" in issue
+                            for issue in cm.exception.rollback_errors))
+
+    def test_temp_failure_audits_unattempted_row_without_writing_it(self):
+        third = PyClip("Third")
+
+        class FailAndChangeUnattempted(FakeName):
+            def set_value(self, new_value):
+                super().set_value(new_value)
+                if new_value.startswith("__DGPY_TMP_"):
+                    third.name.value = "Changed outside attempted rows"
+                    raise RuntimeError("injected temporary failure")
+
+        first = PyClip("First")
+        first.name = FailAndChangeUnattempted("First")
+        second = PyClip("Second")
+        with self.assertRaises(RenameApplyError) as cm:
+            apply_plan(build_plan((first, second, third), "New_{index}"))
+        self.assertEqual(first.name.value, "First")
+        self.assertEqual(second.name.calls, [])
+        self.assertEqual(third.name.calls, [])
+        self.assertEqual(third.name.value, "Changed outside attempted rows")
+        self.assertTrue(any("Original name not restored" in issue
+                            and "'Third'" in issue
+                            for issue in cm.exception.rollback_errors))
+
+
+class RenameApplyDialogTests(unittest.TestCase):
+    """Exercise the actual apply callback with fake UI and name attributes."""
+
+    def _setup(self, clip):
+        self.state = {"plan": build_plan((clip,), "New_{index}"), "blocked": False}
+        self.events = []
+        self.clip = clip
+        self.button = types.SimpleNamespace(
+            setEnabled=lambda enabled: self.events.append(("enabled", enabled))
+        )
+        self.dialog = types.SimpleNamespace(
+            accept=lambda: self.events.append(("accept", None)),
+            reject=lambda: self.events.append(("reject", None)),
+        )
+
+    def _show_error(self, message):
+        self.events.append(("error", message))
+        # A nested click from a modal event loop cannot reapply the plan.
+        self._apply()
+
+    def _refresh(self):
+        self.events.append(("refresh", None))
+        self.state["plan"] = build_plan((self.clip,), "New_{index}")
+
+    def _apply(self):
+        _apply_current_plan(self.state, self.button, self.dialog,
+                            self._show_error, self._refresh)
+
+    def test_apply_failure_with_unrestored_temp_name_closes_without_repreview(self):
+        class RejectRestore(FakeName):
+            def set_value(self, new_value):
+                if new_value == self.original:
+                    raise RuntimeError("restore rejected")
+                return super().set_value(new_value)
+
+        clip = PyClip("Original")
+        clip.name = RejectRestore("Original", failure="temp_after_write")
+        self._setup(clip)
+        self._apply()
+        self.assertTrue(clip.name.value.startswith("__DGPY_TMP_"))
+        self.assertTrue(self.state["blocked"])
+        self.assertIsNone(self.state["plan"])
+        self.assertEqual([kind for kind, _ in self.events],
+                         ["enabled", "error", "reject"])
+        self.assertIn("Rollback issues", self.events[1][1])
+        self.assertIn("temporary names may remain", self.events[1][1])
+        self.assertIn("Restoration is not guaranteed.", self.events[1][1])
+        calls = list(clip.name.calls)
+        # Even if a caller supplies a new plan, a blocked dialog cannot apply.
+        self.state["plan"] = build_plan((clip,), "Another")
+        self._apply()
+        self.assertEqual(clip.name.calls, calls)
+
+    def test_apply_failure_with_successful_compensation_still_closes(self):
+        clip = PyClip("Original", name_failure="temp_after_write")
+        self._setup(clip)
+        self._apply()
+        self.assertEqual(clip.name.value, "Original")
+        self.assertTrue(self.state["blocked"])
+        self.assertEqual([kind for kind, _ in self.events],
+                         ["enabled", "error", "reject"])
+        self.assertIn("Restoration is not guaranteed.", self.events[1][1])
+
+    def test_stale_preview_refreshes_without_rename_or_close(self):
+        clip = PyClip("Original")
+        self._setup(clip)
+        clip.name.value = "Changed"
+        self._apply()
+        self.assertEqual(clip.name.calls, [])
+        self.assertFalse(self.state["blocked"])
+        self.assertEqual([kind for kind, _ in self.events],
+                         ["enabled", "error", "refresh"])
+        self.assertIn("DGpy made no rename calls.", self.events[1][1])
+        self.assertEqual(self.state["plan"].ready_rows[0].original_name, "Changed")
+
+    def test_healthy_apply_accepts_once_and_consumes_preview(self):
+        clip = PyClip("Original")
+        self._setup(clip)
+        self._apply()
+        self._apply()
+        self.assertEqual(clip.name.value, "New_1")
+        self.assertTrue(self.state["blocked"])
+        self.assertIsNone(self.state["plan"])
+        self.assertEqual([kind for kind, _ in self.events], ["enabled", "accept"])
 
 
 class MarkerStalePreviewTests(unittest.TestCase):

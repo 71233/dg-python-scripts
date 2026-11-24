@@ -1,4 +1,4 @@
-"""Capability-based batch rename planning and transactional apply."""
+"""Capability-based batch rename planning and best-effort apply/rollback."""
 
 from __future__ import annotations
 
@@ -290,6 +290,27 @@ def _write_exact(target: RenameTarget, requested: str) -> None:
         )
 
 
+def _verify_original_names(rows: tuple[RenamePreviewRow, ...]) -> tuple[str, ...]:
+    """Read-only final rollback check; does not imply an atomic snapshot."""
+    errors: list[str] = []
+    for row in rows:
+        target = row.target
+        assert target is not None
+        try:
+            actual = _read_name(target)
+        except RenameError as error:
+            errors.append(
+                f"Could not verify original name {target.original_name!r}: {error}"
+            )
+            continue
+        if actual != target.original_name:
+            errors.append(
+                f"Original name not restored for {target.type_name}: "
+                f"expected {target.original_name!r}, actual {actual!r}"
+            )
+    return tuple(errors)
+
+
 def _rollback_after_final_failure(
     rows: tuple[RenamePreviewRow, ...],
     nonce: str,
@@ -371,6 +392,10 @@ def apply_plan(plan: RenamePlan) -> RenameApplyResult:
                 _write_exact(target, target.original_name)
             except RenameError as rollback_error:
                 rollback_errors.append(str(rollback_error))
+        # A later rollback setter can change an earlier row, and a failed
+        # callback can affect a row we never attempted. Inspect every ready
+        # row without writing to it or trying another round of recovery.
+        rollback_errors.extend(_verify_original_names(rows))
         raise RenameApplyError(str(error), rollback_errors) from error
 
     try:
@@ -381,6 +406,7 @@ def apply_plan(plan: RenamePlan) -> RenameApplyResult:
             _write_exact(target, row.new_name)
     except RenameError as error:
         rollback_errors = _rollback_after_final_failure(rows, nonce)
+        rollback_errors += _verify_original_names(rows)
         raise RenameApplyError(str(error), rollback_errors) from error
 
     return RenameApplyResult(changed=len(rows))

@@ -15,6 +15,31 @@ also includes **separate, narrowly scoped fixes to the existing**
 `rename.py` and `markers.py` apply paths, verified only with synthetic
 failure injection and Linux CI; it has not been merged or deployed.
 
+## 2026-11-24 — Rename rollback verification and failure lockout (Draft only)
+
+Individual restoration writes were read back, but a later setter could
+change an already restored row without adding a rollback issue. After
+either temporary-stage or final-stage failure, the existing compensation
+algorithm now performs one **read-only pass over all ready rows** to
+compare their current names with the original preview. Mismatches and
+read errors are appended to existing rollback issues; no second recovery
+attempt is added. This includes ready rows not yet written when a
+temporary setter fails. It does not check unrelated objects or guarantee
+an atomic snapshot, stable host proxies, or successful restoration.
+
+The previous Rename dialog unconditionally rebuilt its preview after any
+apply error, even when a temporary name remained. The apply callback now
+consumes the plan and blocks re-entry and refresh before applying.
+A stale pre-write error retains the ability to review a refreshed preview.
+For any other RenameApplyError it explains possible changed/temporary
+names and uncertain restoration, preserves error details, and closes
+the dialog without automatic re-preview or another apply. This is a
+conservative UI stop, not a persistent cross-dialog host lock.
+Eight synthetic regression cases cover the post-rollback audit,
+unattempted rows, read failures, dialog failure lockout, stale preview
+and healthy apply. Actual Qt event handling, Flame attribute lifetime,
+concurrency and recovery still require G3. No Hook wiring or deployment.
+
 ## 2026-11-24 — honest Marker failure diagnostics (Draft only)
 
 The existing error dialog previously presented `MarkerApplyError.deleted`
