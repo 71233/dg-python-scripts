@@ -226,7 +226,37 @@ def apply_delete_plan(
                 deleted=deleted,
             )
 
-        for marker in target.markers:
+        for marker_index, marker in enumerate(target.markers):
+            if marker_index:
+                # The preceding callback could silently remove, replace,
+                # reorder, or insert *other* markers on this same target.
+                # Compare the exact expected remainder before issuing the
+                # next delete. This is still not atomic with host mutations.
+                try:
+                    current = _as_tuple(
+                        getattr(target.obj, "markers"),
+                        label=f"markers of {target.display_name!r}",
+                    )
+                except Exception as error:
+                    raise MarkerApplyError(
+                        f"Could not revalidate remaining markers for "
+                        f"{target.display_name!r} during deletion; "
+                        "no further delete calls were made.",
+                        deleted=deleted,
+                    ) from error
+                expected = target.markers[marker_index:]
+                if not _same_marker_snapshot(current, expected):
+                    # A net count can underestimate or overestimate the
+                    # actual successful delete operations after a race.
+                    estimate = max(0, target.marker_count - len(current))
+                    raise MarkerApplyError(
+                        f"Marker deletion was incomplete for "
+                        f"{target.display_name!r}: "
+                        f"{len(current)} marker(s) remain or changed "
+                        "during deletion; no further delete calls were made.",
+                        deleted=deleted + estimate,
+                    )
+
             try:
                 delete_marker(marker)
             except Exception as error:
